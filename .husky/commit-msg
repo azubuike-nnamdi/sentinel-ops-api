@@ -1,0 +1,14 @@
+#!/bin/sh
+
+echo "🔍 Running commit-msg hook..."
+
+if [ -z "$1" ]; then
+  echo "❌ Missing commit message file."
+  exit 1
+fi
+
+echo "📝 Validating commit message..."
+pnpm exec commitlint --edit "$1" || exit 1
+
+echo "✅ Commit message checks passed."
+exit 0
