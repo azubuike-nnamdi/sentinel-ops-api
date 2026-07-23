@@ -1,0 +1,13 @@
+.dockerignore
+node_modules
+dist
+coverage
+.git
+.env
+.env.local
+*.md
+*.log
+.DS_Store
+.idea
+.vscode
+test

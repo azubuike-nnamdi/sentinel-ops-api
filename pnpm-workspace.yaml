@@ -1,0 +1,6 @@
+allowBuilds:
+  '@scarf/scarf': false
+  '@swc/core': true
+  bcrypt: true
+  msgpackr-extract: true
+  protobufjs: true
