@@ -65,6 +65,22 @@ import { UsersModule } from './users/users.module';
                 url: req.url,
               }),
             },
+            // Defense-in-depth: never leak session/auth material if serializers widen later.
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'req.headers["set-cookie"]',
+                'req.headers["x-api-key"]',
+                '*.password',
+                '*.accessToken',
+                '*.refreshToken',
+                '*.token',
+                '*.jwt',
+                '*.authorization',
+              ],
+              censor: '[REDACTED]',
+            },
             customProps: () => ({
               context: 'HTTP',
             }),

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { SensitiveDataUtil } from '../common/utils';
 import { LogsRepository } from '../logs/repositories/logs.repository';
 import { MetricsRepository } from '../metrics/repositories/metrics.repository';
 import { IngestTelemetryDto } from './dto/ingest-telemetry.dto';
@@ -11,11 +12,16 @@ export class TelemetryService {
   ) {}
 
   async ingest(dto: IngestTelemetryDto) {
-    const logs = dto.logs || [];
+    const logs = (dto.logs || []).map((log) =>
+      SensitiveDataUtil.sanitizeLogPayload(log),
+    );
     const metrics = dto.metrics || [];
+    const source = SensitiveDataUtil.sanitizeObject(dto.source) || {};
 
     const [createdLogs, createdMetrics] = await Promise.all([
-      logs.length > 0 ? this.logsRepository.createMany(logs) : Promise.resolve([]),
+      logs.length > 0
+        ? this.logsRepository.createMany(logs)
+        : Promise.resolve([]),
       metrics.length > 0
         ? this.metricsRepository.createMany(metrics)
         : Promise.resolve([]),
@@ -26,7 +32,7 @@ export class TelemetryService {
         logs: createdLogs.length,
         metrics: createdMetrics.length,
       },
-      source: dto.source || {},
+      source,
       ingestedAt: new Date().toISOString(),
     };
   }

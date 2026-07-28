@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
-import { PaginationUtil } from '../common/utils';
+import { PaginationUtil, SensitiveDataUtil } from '../common/utils';
 import { PaginatedResult } from '../common/interfaces';
 import { ServicesService } from '../services/services.service';
 import { CreateLogDto } from './dto/create-log.dto';
@@ -18,9 +18,12 @@ export class LogsService {
 
   async create(dto: CreateLogDto): Promise<ILog> {
     await this.servicesService.findById(dto.serviceId);
+    const sanitized = SensitiveDataUtil.sanitizeLogPayload(dto);
     const log = await this.logsRepository.create({
-      ...dto,
-      timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
+      ...sanitized,
+      timestamp: sanitized.timestamp
+        ? new Date(sanitized.timestamp)
+        : new Date(),
     });
     return this.toLog(log);
   }

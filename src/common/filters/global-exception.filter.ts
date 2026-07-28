@@ -21,7 +21,7 @@ interface ValidationErrorBody {
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) { }
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -35,13 +35,22 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     const { status, message, data } = this.resolveException(exception);
 
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
+      const err =
+        exception instanceof Error
+          ? {
+            name: exception.name,
+            message: exception.message,
+            stack: exception.stack,
+          }
+          : { message: String(exception) };
+
       this.logger.error(
         {
           requestId,
           path: request.url,
           method: request.method,
-          err: exception,
+          err,
         },
         message,
       );
@@ -75,35 +84,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.configService.get<string>('app.nodeEnv') === 'production';
 
     if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const exceptionResponse = exception.getResponse();
-
-      if (typeof exceptionResponse === 'string') {
-        return { status, message: exceptionResponse, data: null };
-      }
-
-      const body = exceptionResponse as ValidationErrorBody;
-      const message = Array.isArray(body.message)
-        ? body.message.join('; ')
-        : body.message || exception.message;
-
-      const data =
-        Array.isArray(body.message) && body.message.length > 0
-          ? { errors: body.message }
-          : null;
-
-      return { status, message, data };
+      return this.resolveHttpException(exception);
     }
 
-    if (exception instanceof Error) {
+    // Narrow via helper so `.message` is never read from a `never`-collapsed union.
+    const error = GlobalExceptionFilter.toError(exception);
+    if (error) {
       return {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: isProduction
-          ? 'An unexpected error occurred'
-          : exception.message,
-        data: isProduction
-          ? null
-          : { name: exception.name, stack: exception.stack },
+        message: isProduction ? 'An unexpected error occurred' : error.message,
+        data: isProduction ? null : { name: error.name, stack: error.stack },
       };
     }
 
@@ -112,5 +102,37 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       message: 'An unexpected error occurred',
       data: null,
     };
+  }
+
+  private resolveHttpException(exception: HttpException): {
+    status: number;
+    message: string;
+    data: Record<string, unknown> | null;
+  } {
+    const status = exception.getStatus();
+    const exceptionResponse = exception.getResponse();
+    const fallbackMessage =
+      GlobalExceptionFilter.toError(exception)?.message ||
+      'An unexpected error occurred';
+
+    if (typeof exceptionResponse === 'string') {
+      return { status, message: exceptionResponse, data: null };
+    }
+
+    const body = exceptionResponse as ValidationErrorBody;
+    const message = Array.isArray(body.message)
+      ? body.message.join('; ')
+      : (body.message ?? fallbackMessage);
+
+    const data =
+      Array.isArray(body.message) && body.message.length > 0
+        ? { errors: body.message }
+        : null;
+
+    return { status, message, data };
+  }
+
+  private static toError(exception: unknown): Error | null {
+    return exception instanceof Error ? exception : null;
   }
 }
