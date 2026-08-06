@@ -36,8 +36,8 @@ export class RegisterDto {
 
   @ApiPropertyOptional({
     enum: UserRole,
-    default: UserRole.OPERATOR,
-    description: 'Defaults to Operator when omitted',
+    default: UserRole.OPS,
+    description: 'Defaults to ops when omitted',
   })
   @IsOptional()
   @IsEnum(UserRole)

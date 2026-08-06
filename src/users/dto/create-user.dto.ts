@@ -35,7 +35,7 @@ export class CreateUserDto {
   @MaxLength(128)
   password!: string;
 
-  @ApiPropertyOptional({ enum: UserRole, default: UserRole.OPERATOR })
+  @ApiPropertyOptional({ enum: UserRole, default: UserRole.OPS })
   @IsOptional()
   @IsEnum(UserRole)
   role?: UserRole;

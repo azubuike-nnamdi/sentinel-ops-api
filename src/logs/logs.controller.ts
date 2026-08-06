@@ -13,7 +13,7 @@ export class LogsController {
   constructor(private readonly logsService: LogsService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'Ingest an application log entry' })
   async create(@Body() dto: CreateLogDto) {
     const data = await this.logsService.create(dto);
@@ -21,7 +21,7 @@ export class LogsController {
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List application logs' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.logsService.findAll(query);

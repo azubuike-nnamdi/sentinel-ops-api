@@ -2,11 +2,16 @@ import { HttpService } from '@nestjs/axios';
 import {
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Types } from 'mongoose';
 import { firstValueFrom } from 'rxjs';
 import { AnomaliesService } from '../anomalies/anomalies.service';
+import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { PaginatedResult } from '../common/interfaces';
+import { PaginationUtil } from '../common/utils';
 import { DependenciesService } from '../dependencies/dependencies.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { ServicesService } from '../services/services.service';
@@ -17,6 +22,8 @@ import {
   PredictResult,
   PredictionCandidate,
 } from './interfaces/predict.interface';
+import { PredictionsRepository } from './repositories/predictions.repository';
+import { PredictionDocument } from './schemas/prediction.schema';
 
 @Injectable()
 export class AiService {
@@ -29,29 +36,17 @@ export class AiService {
     private readonly anomaliesService: AnomaliesService,
     private readonly dependenciesService: DependenciesService,
     private readonly metricsService: MetricsService,
-  ) { }
+    private readonly predictionsRepository: PredictionsRepository,
+  ) {}
 
-  async predict(dto: PredictDto): Promise<PredictResult> {
+  async predict(dto: PredictDto, userId: string): Promise<PredictResult> {
     const service = await this.servicesService.findById(dto.serviceId);
-    const [anomalies, dependencies, metrics] = await Promise.all([
-      this.anomaliesService.findAll({ page: 1, limit: 20 }),
-      this.dependenciesService.findAll({ page: 1, limit: 50 }),
-      this.metricsService.findAll({ page: 1, limit: 50 }),
-    ]);
-
-    const relatedDependencies = dependencies.items.filter(
-      (dep) =>
-        dep.sourceServiceId === dto.serviceId ||
-        dep.targetServiceId === dto.serviceId,
-    );
-
-    const relatedAnomalies = anomalies.items.filter(
-      (anomaly) => anomaly.serviceId === dto.serviceId,
-    );
-
-    const relatedMetrics = metrics.items.filter(
-      (metric) => metric.serviceId === dto.serviceId,
-    );
+    const [relatedAnomalies, relatedDependencies, relatedMetrics] =
+      await Promise.all([
+        this.anomaliesService.findByServiceId(dto.serviceId, 50),
+        this.dependenciesService.findByServiceId(dto.serviceId, 50),
+        this.metricsService.findByServiceId(dto.serviceId, 50),
+      ]);
 
     const features = this.buildFeatures(
       relatedMetrics,
@@ -73,8 +68,9 @@ export class AiService {
       top_k: dto.topK ?? 5,
     };
 
+    let result: PredictResult;
     try {
-      return await this.callIsolationForest(service, dto, payload);
+      result = await this.callIsolationForest(service, dto, payload);
     } catch (error) {
       const fallbackEnabled =
         this.configService.get<boolean>('ai.fallbackEnabled') !== false;
@@ -86,18 +82,90 @@ export class AiService {
       }
 
       this.logger.warn(
-        `AI service unreachable; using heuristic fallback:
-          ${error instanceof Error ? error.message : String(error)}
+        `AI service unreachable; using heuristic fallback: ${
+          error instanceof Error ? error.message : String(error)
         }`,
       );
 
-      return this.heuristicPredict(
+      result = this.heuristicPredict(
         service,
         dto,
         relatedAnomalies,
         relatedDependencies,
       );
     }
+
+    const saved = await this.predictionsRepository.create({
+      createdBy: userId,
+      serviceId: service.id,
+      serviceName: service.name,
+      serviceStatus: service.status,
+      symptom: result.symptom,
+      signals: result.signals,
+      predictions: result.predictions,
+      modelInfo: result.model,
+      isAnomaly: result.isAnomaly ?? null,
+      anomalyScore: result.anomalyScore ?? null,
+      features,
+      signalCounts: {
+        anomalies: relatedAnomalies.length,
+        metrics: relatedMetrics.length,
+        dependencies: relatedDependencies.length,
+      },
+      generatedAt: new Date(result.generatedAt),
+    });
+
+    return {
+      ...result,
+      id: saved.id as string,
+      signalCounts: {
+        anomalies: relatedAnomalies.length,
+        metrics: relatedMetrics.length,
+        dependencies: relatedDependencies.length,
+      },
+    };
+  }
+
+  async findAll(
+    query: PaginationQueryDto,
+    userId?: string,
+  ): Promise<PaginatedResult<PredictResult>> {
+    const { page = 1, limit = 20, search, sort } = query;
+    const filter: Record<string, unknown> = userId
+      ? { createdBy: new Types.ObjectId(userId) }
+      : {};
+
+    if (search) {
+      filter.$or = [
+        { symptom: { $regex: search, $options: 'i' } },
+        { serviceName: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.predictionsRepository.findMany(
+        filter,
+        PaginationUtil.getSkip(page, limit),
+        limit,
+        PaginationUtil.parseSort(sort, { createdAt: -1 }),
+      ),
+      this.predictionsRepository.count(filter),
+    ]);
+
+    return PaginationUtil.buildResult(
+      items.map((item) => this.toPredictResult(item)),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  async findById(id: string): Promise<PredictResult> {
+    const prediction = await this.predictionsRepository.findById(id);
+    if (!prediction) {
+      throw new NotFoundException('Prediction not found');
+    }
+    return this.toPredictResult(prediction);
   }
 
   private async callIsolationForest(
@@ -173,8 +241,9 @@ export class AiService {
     const dependencyRisk =
       dependencies.length > 0
         ? Math.max(
-          ...dependencies.map((d) => riskFromCriticality(d.criticality)),
-        ) : 0;
+            ...dependencies.map((d) => riskFromCriticality(d.criticality)),
+          )
+        : 0;
 
     const ctxNum = (key: string): number | undefined => {
       const v = context?.[key];
@@ -254,6 +323,25 @@ export class AiService {
         mode: 'rule-based-fallback',
       },
       generatedAt: new Date().toISOString(),
+    };
+  }
+
+  private toPredictResult(doc: PredictionDocument): PredictResult {
+    return {
+      id: doc.id as string,
+      service: {
+        id: (doc.serviceId as Types.ObjectId).toString(),
+        name: doc.serviceName,
+        status: doc.serviceStatus,
+      },
+      symptom: doc.symptom,
+      signals: doc.signals,
+      predictions: doc.predictions as PredictionCandidate[],
+      model: doc.modelInfo,
+      isAnomaly: doc.isAnomaly ?? undefined,
+      anomalyScore: doc.anomalyScore ?? undefined,
+      signalCounts: doc.signalCounts,
+      generatedAt: doc.generatedAt.toISOString(),
     };
   }
 }

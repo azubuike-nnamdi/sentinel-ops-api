@@ -22,7 +22,7 @@ export class AuthService {
   async register(dto: RegisterDto): Promise<AuthResult> {
     const user = await this.usersService.create({
       ...dto,
-      role: dto.role ?? UserRole.OPERATOR,
+      role: dto.role ?? UserRole.OPS,
     });
 
     const tokens = await this.issueTokens({
@@ -37,7 +37,7 @@ export class AuthService {
   async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.usersService.findByEmailWithPassword(dto.email);
 
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || !user.password) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

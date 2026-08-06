@@ -7,17 +7,17 @@ import { ConfigService } from '@nestjs/config';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { PasswordUtil, PaginationUtil } from '../common/utils';
 import { PaginatedResult } from '../common/interfaces';
+import { UserRole } from '../common/enums';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { IUser } from './interfaces/user.interface';
 import { UsersRepository } from './repositories/users.repository';
 import { UserDocument } from './schemas/user.schema';
-
 @Injectable()
 export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async create(dto: CreateUserDto): Promise<IUser> {
     const emailExists = await this.usersRepository.existsByEmail(dto.email);
@@ -33,23 +33,68 @@ export class UsersService {
       ...dto,
       email: dto.email.toLowerCase(),
       password: hashedPassword,
+      isActive: true,
     });
 
     return this.toUser(user);
   }
 
-  async findAll(
-    query: PaginationQueryDto,
-  ): Promise<PaginatedResult<IUser>> {
+  async createInvited(data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: UserRole;
+  }): Promise<IUser> {
+    const emailExists = await this.usersRepository.existsByEmail(data.email);
+    if (emailExists) {
+      throw new ConflictException('A user with this email already exists');
+    }
+
+    const user = await this.usersRepository.create({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email.toLowerCase(),
+      role: data.role,
+      isActive: false,
+    });
+
+    return this.toUser(user);
+  }
+
+  async activateInvited(
+    userId: string,
+    data: {
+      firstName: string;
+      lastName: string;
+      password: string;
+      role: UserRole;
+    },
+  ): Promise<IUser> {
+    const user = await this.usersRepository.updateById(userId, {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      password: data.password,
+      role: data.role,
+      isActive: true,
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.toUser(user);
+  }
+
+  async findAll(query: PaginationQueryDto): Promise<PaginatedResult<IUser>> {
     const { page = 1, limit = 20, search, sort } = query;
     const filter = search
       ? {
-          $or: [
-            { firstName: { $regex: search, $options: 'i' } },
-            { lastName: { $regex: search, $options: 'i' } },
-            { email: { $regex: search, $options: 'i' } },
-          ],
-        }
+        $or: [
+          { firstName: { $regex: search, $options: 'i' } },
+          { lastName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      }
       : {};
 
     const [items, total] = await Promise.all([
@@ -134,7 +179,7 @@ export class UsersService {
 
   toUser(user: UserDocument): IUser {
     return {
-      id: user.id as string,
+      id: user.id,
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,

@@ -13,7 +13,7 @@ export class MetricsController {
   constructor(private readonly metricsService: MetricsService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'Ingest a service metric datapoint' })
   async create(@Body() dto: CreateMetricDto) {
     const data = await this.metricsService.create(dto);
@@ -21,7 +21,7 @@ export class MetricsController {
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List service metrics' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.metricsService.findAll(query);

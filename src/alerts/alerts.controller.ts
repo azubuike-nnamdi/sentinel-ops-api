@@ -12,7 +12,7 @@ export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List alerts' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.alertsService.findAll(query);

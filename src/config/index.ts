@@ -2,6 +2,7 @@ import aiConfig from './ai.config';
 import appConfig from './app.config';
 import databaseConfig from './database.config';
 import jwtConfig from './jwt.config';
+import mailConfig from './mail.config';
 import otelConfig from './otel.config';
 import redisConfig from './redis.config';
 import throttlerConfig from './throttler.config';
@@ -14,6 +15,7 @@ export const configurations = [
   throttlerConfig,
   otelConfig,
   aiConfig,
+  mailConfig,
 ];
 
 export {
@@ -21,6 +23,7 @@ export {
   appConfig,
   databaseConfig,
   jwtConfig,
+  mailConfig,
   redisConfig,
   throttlerConfig,
   otelConfig,

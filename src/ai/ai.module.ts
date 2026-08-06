@@ -1,11 +1,14 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 import { AnomaliesModule } from '../anomalies/anomalies.module';
 import { DependenciesModule } from '../dependencies/dependencies.module';
 import { MetricsModule } from '../metrics/metrics.module';
 import { ServicesModule } from '../services/services.module';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { PredictionsRepository } from './repositories/predictions.repository';
+import { Prediction, PredictionSchema } from './schemas/prediction.schema';
 
 @Module({
   imports: [
@@ -13,13 +16,16 @@ import { AiService } from './ai.service';
       timeout: 10_000,
       maxRedirects: 0,
     }),
+    MongooseModule.forFeature([
+      { name: Prediction.name, schema: PredictionSchema },
+    ]),
     ServicesModule,
     AnomaliesModule,
     DependenciesModule,
     MetricsModule,
   ],
   controllers: [AiController],
-  providers: [AiService],
+  providers: [AiService, PredictionsRepository],
   exports: [AiService],
 })
 export class AiModule {}

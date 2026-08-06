@@ -13,6 +13,22 @@ export class DependenciesService {
     private readonly dependenciesRepository: DependenciesRepository,
   ) {}
 
+  async findByServiceId(
+    serviceId: string,
+    limit = 50,
+  ): Promise<IDependency[]> {
+    const oid = new Types.ObjectId(serviceId);
+    const items = await this.dependenciesRepository.findMany(
+      {
+        $or: [{ sourceServiceId: oid }, { targetServiceId: oid }],
+      },
+      0,
+      limit,
+      { createdAt: -1 },
+    );
+    return items.map((item) => this.toDependency(item));
+  }
+
   async findAll(
     query: PaginationQueryDto,
   ): Promise<PaginatedResult<IDependency>> {

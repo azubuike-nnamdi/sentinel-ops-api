@@ -16,12 +16,13 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { DatabaseModule } from './database/database.module';
 import { DependenciesModule } from './dependencies/dependencies.module';
 import { IncidentsModule } from './incidents/incidents.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import { LogsModule } from './logs/logs.module';
+import { MailModule } from './mail/mail.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { ServicesModule } from './services/services.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { UsersModule } from './users/users.module';
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -116,8 +117,10 @@ import { UsersModule } from './users/users.module';
       }),
     }),
     CommonModule,
+    MailModule,
     UsersModule,
     AuthModule,
+    InvitationsModule,
     ServicesModule,
     LogsModule,
     MetricsModule,

@@ -14,7 +14,7 @@ export class AnomaliesService {
   constructor(
     private readonly anomaliesRepository: AnomaliesRepository,
     private readonly servicesService: ServicesService,
-  ) {}
+  ) { }
 
   async create(dto: CreateAnomalyDto): Promise<IAnomaly> {
     await this.servicesService.findById(dto.serviceId);
@@ -25,15 +25,25 @@ export class AnomaliesService {
     return this.toAnomaly(anomaly);
   }
 
+  async findByServiceId(serviceId: string, limit = 50): Promise<IAnomaly[]> {
+    const items = await this.anomaliesRepository.findMany(
+      { serviceId: new Types.ObjectId(serviceId) },
+      0,
+      limit,
+      { detectedAt: -1 },
+    );
+    return items.map((item) => this.toAnomaly(item));
+  }
+
   async findAll(query: PaginationQueryDto): Promise<PaginatedResult<IAnomaly>> {
     const { page = 1, limit = 20, search, sort } = query;
     const filter = search
       ? {
-          $or: [
-            { metricName: { $regex: search, $options: 'i' } },
-            { description: { $regex: search, $options: 'i' } },
-          ],
-        }
+        $or: [
+          { metricName: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ],
+      }
       : {};
 
     const [items, total] = await Promise.all([
@@ -60,8 +70,8 @@ export class AnomaliesService {
 
   toAnomaly(anomaly: AnomalyDocument): IAnomaly {
     return {
-      id: anomaly.id as string,
-      serviceId: (anomaly.serviceId as Types.ObjectId).toString(),
+      id: anomaly.id,
+      serviceId: anomaly.serviceId.toString(),
       metricName: anomaly.metricName,
       score: anomaly.score,
       status: anomaly.status,

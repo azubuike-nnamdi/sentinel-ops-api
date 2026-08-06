@@ -44,7 +44,7 @@ describe('UsersService', () => {
       firstName: 'Ada',
       lastName: 'Lovelace',
       email: 'ada@sentinelops.io',
-      role: UserRole.ADMINISTRATOR,
+      role: UserRole.ADMIN,
       isActive: true,
       lastLoginAt: null,
       createdAt: new Date(),
@@ -56,7 +56,7 @@ describe('UsersService', () => {
       lastName: 'Lovelace',
       email: 'ada@sentinelops.io',
       password: 'Str0ngP@ssw0rd!',
-      role: UserRole.ADMINISTRATOR,
+      role: UserRole.ADMIN,
     });
 
     expect(user.email).toBe('ada@sentinelops.io');

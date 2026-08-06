@@ -7,6 +7,7 @@ export interface PredictionCandidate {
 }
 
 export interface PredictResult {
+  id?: string;
   service: {
     id: string;
     name: string;
@@ -21,6 +22,11 @@ export interface PredictResult {
   };
   isAnomaly?: boolean;
   anomalyScore?: number;
+  signalCounts?: {
+    anomalies: number;
+    metrics: number;
+    dependencies: number;
+  };
   generatedAt: string;
 }
 

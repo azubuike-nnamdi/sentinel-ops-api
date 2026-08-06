@@ -13,7 +13,7 @@ export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS)
   @ApiOperation({ summary: 'Register a monitored service' })
   async create(@Body() dto: CreateServiceDto) {
     const data = await this.servicesService.create(dto);
@@ -21,11 +21,7 @@ export class ServicesController {
   }
 
   @Get()
-  @Roles(
-    UserRole.ADMINISTRATOR,
-    UserRole.DEVOPS_ENGINEER,
-    UserRole.OPERATOR,
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List monitored services' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.servicesService.findAll(query);
@@ -33,11 +29,7 @@ export class ServicesController {
   }
 
   @Get(':id')
-  @Roles(
-    UserRole.ADMINISTRATOR,
-    UserRole.DEVOPS_ENGINEER,
-    UserRole.OPERATOR,
-  )
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'Get a service by id' })
   async findOne(@Param('id') id: string) {
     const data = await this.servicesService.findById(id);

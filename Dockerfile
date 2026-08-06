@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm build && pnpm prune --prod
+RUN HUSKY=0 pnpm build && HUSKY=0 pnpm prune --prod --ignore-scripts
 
 FROM node:22-alpine AS production
 ENV NODE_ENV=production

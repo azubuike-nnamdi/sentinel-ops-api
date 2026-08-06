@@ -8,10 +8,14 @@ import { MetricsService } from '../metrics/metrics.service';
 import { ServicesService } from '../services/services.service';
 import { ServiceStatus } from '../common/enums';
 import { AiService } from './ai.service';
+import { PredictionsRepository } from './repositories/predictions.repository';
 
 describe('AiService', () => {
   let service: AiService;
   let httpService: { post: jest.Mock };
+  let predictionsRepository: { create: jest.Mock };
+
+  const userId = '507f1f77bcf86cd799439011';
 
   beforeEach(async () => {
     httpService = {
@@ -39,6 +43,12 @@ describe('AiService', () => {
           },
         }),
       ),
+    };
+
+    predictionsRepository = {
+      create: jest.fn().mockResolvedValue({
+        id: 'pred1',
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -69,38 +79,38 @@ describe('AiService', () => {
         {
           provide: AnomaliesService,
           useValue: {
-            findAll: jest.fn().mockResolvedValue({
-              items: [
-                {
-                  id: 'a1',
-                  serviceId: 's1',
-                  metricName: 'latency',
-                  score: 0.9,
-                  description: 'Latency spike',
-                },
-              ],
-            }),
+            findByServiceId: jest.fn().mockResolvedValue([
+              {
+                id: 'a1',
+                serviceId: 's1',
+                metricName: 'latency',
+                score: 0.9,
+                description: 'Latency spike',
+              },
+            ]),
           },
         },
         {
           provide: DependenciesService,
           useValue: {
-            findAll: jest.fn().mockResolvedValue({ items: [] }),
+            findByServiceId: jest.fn().mockResolvedValue([]),
           },
         },
         {
           provide: MetricsService,
           useValue: {
-            findAll: jest.fn().mockResolvedValue({
-              items: [
-                {
-                  serviceId: 's1',
-                  name: 'latency_ms',
-                  value: 900,
-                },
-              ],
-            }),
+            findByServiceId: jest.fn().mockResolvedValue([
+              {
+                serviceId: 's1',
+                name: 'latency_ms',
+                value: 900,
+              },
+            ]),
           },
+        },
+        {
+          provide: PredictionsRepository,
+          useValue: predictionsRepository,
         },
       ],
     }).compile();
@@ -109,17 +119,22 @@ describe('AiService', () => {
   });
 
   it('returns Isolation Forest predictions from AI service', async () => {
-    const result = await service.predict({
-      serviceId: 's1',
-      symptom: 'Checkout is slow',
-    });
+    const result = await service.predict(
+      {
+        serviceId: 's1',
+        symptom: 'Checkout is slow',
+      },
+      userId,
+    );
 
     expect(httpService.post).toHaveBeenCalled();
+    expect(predictionsRepository.create).toHaveBeenCalled();
     expect(result.predictions.length).toBeGreaterThan(0);
     expect(result.predictions[0].confidence).toBe(0.9);
     expect(result.model.name).toContain('isolation-forest');
     expect(result.isAnomaly).toBe(true);
     expect(result.anomalyScore).toBe(0.91);
+    expect(result.id).toBe('pred1');
   });
 
   it('falls back to heuristic when AI service fails', async () => {
@@ -128,12 +143,16 @@ describe('AiService', () => {
       throwError(() => new Error('connection refused')),
     );
 
-    const result = await service.predict({
-      serviceId: 's1',
-      symptom: 'Checkout is slow',
-    });
+    const result = await service.predict(
+      {
+        serviceId: 's1',
+        symptom: 'Checkout is slow',
+      },
+      userId,
+    );
 
     expect(result.model.mode).toBe('rule-based-fallback');
     expect(result.predictions[0].confidence).toBe(0.9);
+    expect(predictionsRepository.create).toHaveBeenCalled();
   });
 });

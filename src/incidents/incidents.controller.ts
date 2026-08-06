@@ -21,10 +21,10 @@ import { IncidentsService } from './incidents.service';
 @ApiBearerAuth('JWT')
 @Controller('incidents')
 export class IncidentsController {
-  constructor(private readonly incidentsService: IncidentsService) {}
+  constructor(private readonly incidentsService: IncidentsService) { }
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS)
   @ApiOperation({ summary: 'Create an incident' })
   async create(@Body() dto: CreateIncidentDto) {
     const data = await this.incidentsService.create(dto);
@@ -32,7 +32,7 @@ export class IncidentsController {
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List incidents' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.incidentsService.findAll(query);
@@ -40,7 +40,7 @@ export class IncidentsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'Update an incident by id' })
   async update(@Param('id') id: string, @Body() dto: UpdateIncidentDto) {
     const data = await this.incidentsService.update(id, dto);

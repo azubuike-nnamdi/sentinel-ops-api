@@ -12,7 +12,7 @@ export class DependenciesController {
   constructor(private readonly dependenciesService: DependenciesService) {}
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List service dependency relationships' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.dependenciesService.findAll(query);

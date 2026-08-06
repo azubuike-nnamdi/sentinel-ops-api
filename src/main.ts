@@ -4,7 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
-import compression from 'compression';
+import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { bootstrapTelemetry } from './shared/otel-bootstrap';
 import { APP_CONSTANTS } from './common/constants';
@@ -42,7 +42,11 @@ async function bootstrap(): Promise<void> {
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
-  app.use(compression());
+  const compress =
+    typeof compression === 'function'
+      ? compression
+      : (compression as { default: typeof compression }).default;
+  app.use(compress());
 
   app.enableCors({
     origin: corsOrigins,

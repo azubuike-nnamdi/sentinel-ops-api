@@ -33,13 +33,13 @@ export class User {
   })
   email!: string;
 
-  @Prop({ required: true, select: false })
-  password!: string;
+  @Prop({ required: false, select: false })
+  password?: string;
 
   @Prop({
     required: true,
     enum: UserRole,
-    default: UserRole.OPERATOR,
+    default: UserRole.OPS,
     index: true,
   })
   role!: UserRole;

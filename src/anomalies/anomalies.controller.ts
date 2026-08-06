@@ -10,10 +10,10 @@ import { AnomaliesService } from './anomalies.service';
 @ApiBearerAuth('JWT')
 @Controller('anomalies')
 export class AnomaliesController {
-  constructor(private readonly anomaliesService: AnomaliesService) {}
+  constructor(private readonly anomaliesService: AnomaliesService) { }
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS)
   @ApiOperation({ summary: 'Record a detected anomaly' })
   async create(@Body() dto: CreateAnomalyDto) {
     const data = await this.anomaliesService.create(dto);
@@ -21,7 +21,7 @@ export class AnomaliesController {
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List detected anomalies' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.anomaliesService.findAll(query);

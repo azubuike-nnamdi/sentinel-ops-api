@@ -39,9 +39,10 @@ Production-ready NestJS backend following Clean Architecture / DDD with feature 
 | **AI** | Isolation Forest RCA via FastAPI (`POST /ai/predict` → `:8001`) |
 
 ### Roles
-- `Administrator`
-- `DevOps Engineer`
-- `Operator`
+- `super_admin`
+- `admin`
+- `devops`
+- `ops`
 
 ## Stack
 
@@ -118,7 +119,7 @@ curl -X POST http://localhost:8000/api/v1/auth/register \
     "lastName": "Lovelace",
     "email": "ada@sentinelops.io",
     "password": "Str0ngP@ssw0rd!",
-    "role": "Administrator"
+    "role": "admin"
   }'
 
 # Login

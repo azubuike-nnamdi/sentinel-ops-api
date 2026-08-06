@@ -26,15 +26,15 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Create a user (Administrator only)' })
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Create a user (admin / super_admin only)' })
   async create(@Body() dto: CreateUserDto) {
     const data = await this.usersService.create(dto);
     return { message: 'User created successfully', data };
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS)
   @ApiOperation({ summary: 'List users' })
   async findAll(@Query() query: PaginationQueryDto) {
     const data = await this.usersService.findAll(query);
@@ -42,7 +42,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS)
   @ApiOperation({ summary: 'Get a user by id' })
   async findOne(@Param('id') id: string) {
     const data = await this.usersService.findById(id);
@@ -50,16 +50,16 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Update a user (Administrator only)' })
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update a user (admin / super_admin only)' })
   async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     const data = await this.usersService.update(id, dto);
     return { message: 'User updated successfully', data };
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMINISTRATOR)
-  @ApiOperation({ summary: 'Deactivate a user (Administrator only)' })
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Deactivate a user (admin / super_admin only)' })
   async deactivate(@Param('id') id: string) {
     const data = await this.usersService.deactivate(id);
     return { message: 'User deactivated successfully', data };

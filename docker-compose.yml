@@ -17,9 +17,55 @@ services:
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      INVITE_TTL_DAYS: ${INVITE_TTL_DAYS:-7}
+      MAIL_AUTH: ${MAIL_AUTH:-null}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@sentinel.com}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_INSECURE_TLS: ${SMTP_INSECURE_TLS:-true}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-Sentinel Ops}
+      SMTP_USER: ${SMTP_USER:-}
+      # Compose service DNS (not localhost — that is this container).
+      AI_SERVICE_URL: http://ai:8001
+      AI_SERVICE_TIMEOUT_MS: ${AI_SERVICE_TIMEOUT_MS:-10000}
+      AI_FALLBACK_ENABLED: ${AI_FALLBACK_ENABLED:-true}
     depends_on:
       redis:
         condition: service_healthy
+      ai:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sentinelops
+
+  ai:
+    build:
+      context: ../sentinel-ops-ai
+      dockerfile: Dockerfile
+    container_name: sentinelops-ai
+    ports:
+      - "${AI_PORT:-8001}:8001"
+    environment:
+      APP_NAME: SentinelOps AI
+      APP_ENV: ${APP_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: 8001
+      LOG_LEVEL: ${AI_LOG_LEVEL:-info}
+      MODEL_PATH: model.pkl
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     networks:
       - sentinelops

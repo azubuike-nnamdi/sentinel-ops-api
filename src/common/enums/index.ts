@@ -1,8 +1,30 @@
 export enum UserRole {
-  ADMINISTRATOR = 'Administrator',
-  DEVOPS_ENGINEER = 'DevOps Engineer',
-  OPERATOR = 'Operator',
+  SUPER_ADMIN = 'super_admin',
+  ADMIN = 'admin',
+  DEVOPS = 'devops',
+  OPS = 'ops',
 }
+
+/** Roles that can invite / manage users. */
+export const ADMIN_ROLES: UserRole[] = [
+  UserRole.SUPER_ADMIN,
+  UserRole.ADMIN,
+];
+
+/** All authenticated app roles. */
+export const ALL_ROLES: UserRole[] = [
+  UserRole.SUPER_ADMIN,
+  UserRole.ADMIN,
+  UserRole.DEVOPS,
+  UserRole.OPS,
+];
+
+/** Roles with operational write access (create services/incidents/anomalies). */
+export const WRITE_ROLES: UserRole[] = [
+  UserRole.SUPER_ADMIN,
+  UserRole.ADMIN,
+  UserRole.DEVOPS,
+];
 
 export enum ServiceStatus {
   HEALTHY = 'healthy',
@@ -63,4 +85,11 @@ export enum DependencyType {
   QUEUE = 'queue',
   CACHE = 'cache',
   EXTERNAL = 'external',
+}
+
+export enum InvitationStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REVOKED = 'revoked',
+  EXPIRED = 'expired',
 }

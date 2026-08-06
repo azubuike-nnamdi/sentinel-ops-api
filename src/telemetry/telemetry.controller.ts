@@ -12,7 +12,7 @@ export class TelemetryController {
   constructor(private readonly telemetryService: TelemetryService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRATOR, UserRole.DEVOPS_ENGINEER, UserRole.OPERATOR)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'Batch ingest logs and metrics telemetry' })
   async ingest(@Body() dto: IngestTelemetryDto) {
     const data = await this.telemetryService.ingest(dto);

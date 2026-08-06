@@ -25,6 +25,16 @@ export class MetricsService {
     return this.toMetric(metric);
   }
 
+  async findByServiceId(serviceId: string, limit = 50): Promise<IMetric[]> {
+    const items = await this.metricsRepository.findMany(
+      { serviceId: new Types.ObjectId(serviceId) },
+      0,
+      limit,
+      { timestamp: -1 },
+    );
+    return items.map((item) => this.toMetric(item));
+  }
+
   async findAll(query: PaginationQueryDto): Promise<PaginatedResult<IMetric>> {
     const { page = 1, limit = 20, search, sort } = query;
     const filter = search

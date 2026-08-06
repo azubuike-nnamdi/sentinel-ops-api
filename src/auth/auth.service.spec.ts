@@ -55,7 +55,7 @@ describe('AuthService', () => {
         firstName: 'Grace',
         lastName: 'Hopper',
         email: 'grace@sentinelops.io',
-        role: UserRole.OPERATOR,
+        role: UserRole.OPS,
         isActive: true,
         lastLoginAt: null,
         createdAt: new Date(),
@@ -75,7 +75,7 @@ describe('AuthService', () => {
       });
 
       expect(usersService.create).toHaveBeenCalledWith(
-        expect.objectContaining({ role: UserRole.OPERATOR }),
+        expect.objectContaining({ role: UserRole.OPS }),
       );
       expect(result.tokens.accessToken).toBe('access-token');
       expect(result.user.email).toBe('grace@sentinelops.io');
@@ -103,7 +103,7 @@ describe('AuthService', () => {
         firstName: 'Grace',
         lastName: 'Hopper',
         email: 'grace@sentinelops.io',
-        role: UserRole.OPERATOR,
+        role: UserRole.OPS,
         isActive: true,
         password: hash,
         lastLoginAt: null,
