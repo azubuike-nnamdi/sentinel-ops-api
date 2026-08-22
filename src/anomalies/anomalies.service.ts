@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { AlertsService } from '../alerts/alerts.service';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
+import { AlertSeverity } from '../common/enums';
 import { PaginationUtil } from '../common/utils';
 import { PaginatedResult } from '../common/interfaces';
 import { ServicesService } from '../services/services.service';
@@ -14,6 +16,7 @@ export class AnomaliesService {
   constructor(
     private readonly anomaliesRepository: AnomaliesRepository,
     private readonly servicesService: ServicesService,
+    private readonly alertsService: AlertsService,
   ) { }
 
   async create(dto: CreateAnomalyDto): Promise<IAnomaly> {
@@ -22,7 +25,16 @@ export class AnomaliesService {
       ...dto,
       detectedAt: dto.detectedAt ? new Date(dto.detectedAt) : new Date(),
     });
-    return this.toAnomaly(anomaly);
+    const created = this.toAnomaly(anomaly);
+    await this.alertsService.createSafely({
+      title: `Anomaly: ${created.metricName}`,
+      message: created.description,
+      severity:
+        created.score >= 0.8 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING,
+      serviceId: created.serviceId,
+      channel: 'in-app',
+    });
+    return created;
   }
 
   async findByServiceId(serviceId: string, limit = 50): Promise<IAnomaly[]> {

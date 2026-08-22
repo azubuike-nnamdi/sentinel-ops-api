@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { AlertsService } from '../alerts/alerts.service';
+import { matchMetricThreshold } from '../alerts/alert-thresholds';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { PaginationUtil } from '../common/utils';
 import { PaginatedResult } from '../common/interfaces';
@@ -14,6 +16,7 @@ export class MetricsService {
   constructor(
     private readonly metricsRepository: MetricsRepository,
     private readonly servicesService: ServicesService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async create(dto: CreateMetricDto): Promise<IMetric> {
@@ -22,7 +25,18 @@ export class MetricsService {
       ...dto,
       timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
     });
-    return this.toMetric(metric);
+    const created = this.toMetric(metric);
+    const match = matchMetricThreshold(created.name, created.value);
+    if (match) {
+      await this.alertsService.createSafely({
+        title: match.title,
+        message: match.message,
+        severity: match.severity,
+        serviceId: created.serviceId,
+        channel: 'in-app',
+      });
+    }
+    return created;
   }
 
   async findByServiceId(serviceId: string, limit = 50): Promise<IMetric[]> {

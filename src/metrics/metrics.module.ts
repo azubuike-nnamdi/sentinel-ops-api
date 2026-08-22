@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AlertsModule } from '../alerts/alerts.module';
 import { ServicesModule } from '../services/services.module';
 import { MetricsController } from './metrics.controller';
 import { MetricsRepository } from './repositories/metrics.repository';
@@ -10,6 +11,7 @@ import { Metric, MetricSchema } from './schemas/metric.schema';
   imports: [
     MongooseModule.forFeature([{ name: Metric.name, schema: MetricSchema }]),
     ServicesModule,
+    AlertsModule,
   ],
   controllers: [MetricsController],
   providers: [MetricsService, MetricsRepository],

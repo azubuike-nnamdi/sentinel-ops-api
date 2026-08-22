@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { AlertsService } from '../alerts/alerts.service';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
-import { IncidentStatus } from '../common/enums';
+import {
+  AlertSeverity,
+  IncidentSeverity,
+  IncidentStatus,
+} from '../common/enums';
 import { PaginationUtil } from '../common/utils';
 import { PaginatedResult } from '../common/interfaces';
 import {
@@ -14,11 +19,16 @@ import { IncidentDocument } from './schemas/incident.schema';
 
 @Injectable()
 export class IncidentsService {
-  constructor(private readonly incidentsRepository: IncidentsRepository) {}
+  constructor(
+    private readonly incidentsRepository: IncidentsRepository,
+    private readonly alertsService: AlertsService,
+  ) {}
 
   async create(dto: CreateIncidentDto): Promise<IIncident> {
     const incident = await this.incidentsRepository.create(dto);
-    return this.toIncident(incident);
+    const created = this.toIncident(incident);
+    await this.emitIncidentAlerts(created);
+    return created;
   }
 
   async findAll(
@@ -80,6 +90,40 @@ export class IncidentsService {
 
   async countOpen(): Promise<number> {
     return this.incidentsRepository.countOpen();
+  }
+
+  private async emitIncidentAlerts(incident: IIncident): Promise<void> {
+    const serviceIds = incident.serviceIds.filter(Boolean);
+    if (serviceIds.length === 0) {
+      return;
+    }
+
+    const severity = this.toAlertSeverity(incident.severity);
+    await Promise.all(
+      serviceIds.map((serviceId) =>
+        this.alertsService.createSafely({
+          title: `Incident: ${incident.title}`,
+          message: incident.description,
+          severity,
+          serviceId,
+          incidentId: incident.id,
+          channel: 'in-app',
+        }),
+      ),
+    );
+  }
+
+  private toAlertSeverity(severity: IncidentSeverity): AlertSeverity {
+    if (
+      severity === IncidentSeverity.CRITICAL ||
+      severity === IncidentSeverity.HIGH
+    ) {
+      return AlertSeverity.CRITICAL;
+    }
+    if (severity === IncidentSeverity.LOW) {
+      return AlertSeverity.INFO;
+    }
+    return AlertSeverity.WARNING;
   }
 
   toIncident(incident: IncidentDocument): IIncident {

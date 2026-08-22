@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AlertsModule } from '../alerts/alerts.module';
 import { ServicesModule } from '../services/services.module';
 import { AnomaliesController } from './anomalies.controller';
 import { AnomaliesRepository } from './repositories/anomalies.repository';
@@ -10,6 +11,7 @@ import { Anomaly, AnomalySchema } from './schemas/anomaly.schema';
   imports: [
     MongooseModule.forFeature([{ name: Anomaly.name, schema: AnomalySchema }]),
     ServicesModule,
+    AlertsModule,
   ],
   controllers: [AnomaliesController],
   providers: [AnomaliesService, AnomaliesRepository],

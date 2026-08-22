@@ -3,6 +3,8 @@ import { Types } from 'mongoose';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { PaginationUtil } from '../common/utils';
 import { PaginatedResult } from '../common/interfaces';
+import { ServicesService } from '../services/services.service';
+import { CreateDependencyDto } from './dto/create-dependency.dto';
 import { IDependency } from './interfaces/dependency.interface';
 import { DependenciesRepository } from './repositories/dependencies.repository';
 import { DependencyDocument } from './schemas/dependency.schema';
@@ -11,7 +13,15 @@ import { DependencyDocument } from './schemas/dependency.schema';
 export class DependenciesService {
   constructor(
     private readonly dependenciesRepository: DependenciesRepository,
+    private readonly servicesService: ServicesService,
   ) {}
+
+  async create(dto: CreateDependencyDto): Promise<IDependency> {
+    await this.servicesService.findById(dto.sourceServiceId);
+    await this.servicesService.findById(dto.targetServiceId);
+    const created = await this.dependenciesRepository.create(dto);
+    return this.toDependency(created);
+  }
 
   async findByServiceId(
     serviceId: string,
@@ -20,6 +30,7 @@ export class DependenciesService {
     const oid = new Types.ObjectId(serviceId);
     const items = await this.dependenciesRepository.findMany(
       {
+        isActive: true,
         $or: [{ sourceServiceId: oid }, { targetServiceId: oid }],
       },
       0,

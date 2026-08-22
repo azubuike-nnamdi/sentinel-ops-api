@@ -43,4 +43,31 @@ export class AlertsRepository {
       .countDocuments({ status: AlertStatus.ACTIVE })
       .exec();
   }
+
+  async findActiveDuplicate(
+    serviceId: string,
+    title: string,
+    since: Date,
+  ): Promise<AlertDocument | null> {
+    return this.alertModel
+      .findOne({
+        serviceId: new Types.ObjectId(serviceId),
+        title,
+        status: AlertStatus.ACTIVE,
+        triggeredAt: { $gte: since },
+      })
+      .exec();
+  }
+
+  async updateById(
+    id: string,
+    data: Partial<{
+      status: AlertStatus;
+      acknowledgedAt: Date | null;
+    }>,
+  ): Promise<AlertDocument | null> {
+    return this.alertModel
+      .findByIdAndUpdate(id, { $set: data }, { new: true })
+      .exec();
+  }
 }
