@@ -26,6 +26,17 @@ export class AiController {
     return { message: 'Prediction generated successfully', data };
   }
 
+  @Get('evaluation')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
+  @ApiOperation({
+    summary:
+      'Offline Isolation Forest vs One-Class SVM vs LOF comparison (not used for production predict)',
+  })
+  async evaluation(@Query('rerun') rerun?: string) {
+    const data = await this.aiService.getEvaluation(rerun === 'true');
+    return { message: 'Algorithm comparison retrieved successfully', data };
+  }
+
   @Get('predictions')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DEVOPS, UserRole.OPS)
   @ApiOperation({ summary: 'List saved prediction runs for the current user' })

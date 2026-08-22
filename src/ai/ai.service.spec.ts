@@ -2,8 +2,10 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { of } from 'rxjs';
+import { AlertsService } from '../alerts/alerts.service';
 import { AnomaliesService } from '../anomalies/anomalies.service';
 import { DependenciesService } from '../dependencies/dependencies.service';
+import { LogsService } from '../logs/logs.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { ServicesService } from '../services/services.service';
 import { ServiceStatus } from '../common/enums';
@@ -14,6 +16,7 @@ describe('AiService', () => {
   let service: AiService;
   let httpService: { post: jest.Mock };
   let predictionsRepository: { create: jest.Mock };
+  let alertsService: { createSafely: jest.Mock };
 
   const userId = '507f1f77bcf86cd799439011';
 
@@ -50,6 +53,8 @@ describe('AiService', () => {
         id: 'pred1',
       }),
     };
+
+    alertsService = { createSafely: jest.fn().mockResolvedValue(null) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -109,8 +114,18 @@ describe('AiService', () => {
           },
         },
         {
+          provide: LogsService,
+          useValue: {
+            countErrorLogsByServiceId: jest.fn().mockResolvedValue(12),
+          },
+        },
+        {
           provide: PredictionsRepository,
           useValue: predictionsRepository,
+        },
+        {
+          provide: AlertsService,
+          useValue: alertsService,
         },
       ],
     }).compile();
@@ -135,6 +150,23 @@ describe('AiService', () => {
     expect(result.isAnomaly).toBe(true);
     expect(result.anomalyScore).toBe(0.91);
     expect(result.id).toBe('pred1');
+    const posted = httpService.post.mock.calls[0][1] as {
+      features: Record<string, number>;
+    };
+    expect(posted.features).toEqual(
+      expect.objectContaining({
+        latency_ms: 900,
+        log_error_count: 12,
+        anomaly_score: 0.9,
+      }),
+    );
+    expect(result.features?.log_error_count).toBe(12);
+    expect(alertsService.createSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Anomalous prediction: Payment Gateway',
+        serviceId: 's1',
+      }),
+    );
   });
 
   it('falls back to heuristic when AI service fails', async () => {

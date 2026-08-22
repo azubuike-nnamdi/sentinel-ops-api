@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { LogEntry, LogDocument } from '../schemas/log.schema';
 import { CreateLogData } from '../interfaces/log.interface';
+import { LogLevel } from '../../common/enums';
 
 type LogFilter = Record<string, unknown>;
 
@@ -45,5 +46,18 @@ export class LogsRepository {
 
   async countSince(since: Date): Promise<number> {
     return this.logModel.countDocuments({ timestamp: { $gte: since } }).exec();
+  }
+
+  async countErrorLogsForService(
+    serviceId: string,
+    since: Date,
+  ): Promise<number> {
+    return this.logModel
+      .countDocuments({
+        serviceId: new Types.ObjectId(serviceId),
+        level: { $in: [LogLevel.ERROR, LogLevel.FATAL] },
+        timestamp: { $gte: since },
+      })
+      .exec();
   }
 }

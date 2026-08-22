@@ -9,16 +9,20 @@ import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import { firstValueFrom } from 'rxjs';
 import { AnomaliesService } from '../anomalies/anomalies.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { PaginatedResult } from '../common/interfaces';
 import { PaginationUtil } from '../common/utils';
 import { DependenciesService } from '../dependencies/dependencies.service';
+import { LogsService } from '../logs/logs.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { ServicesService } from '../services/services.service';
+import { AlertSeverity } from '../common/enums';
 import { PredictDto } from './dto/predict.dto';
 import {
   AiPredictRequestPayload,
   AiPredictResponsePayload,
+  OperationalFeatures,
   PredictResult,
   PredictionCandidate,
 } from './interfaces/predict.interface';
@@ -36,22 +40,26 @@ export class AiService {
     private readonly anomaliesService: AnomaliesService,
     private readonly dependenciesService: DependenciesService,
     private readonly metricsService: MetricsService,
+    private readonly logsService: LogsService,
     private readonly predictionsRepository: PredictionsRepository,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async predict(dto: PredictDto, userId: string): Promise<PredictResult> {
     const service = await this.servicesService.findById(dto.serviceId);
-    const [relatedAnomalies, relatedDependencies, relatedMetrics] =
+    const [relatedAnomalies, relatedDependencies, relatedMetrics, errorLogs] =
       await Promise.all([
         this.anomaliesService.findByServiceId(dto.serviceId, 50),
         this.dependenciesService.findByServiceId(dto.serviceId, 50),
         this.metricsService.findByServiceId(dto.serviceId, 50),
+        this.logsService.countErrorLogsByServiceId(dto.serviceId, 24),
       ]);
 
     const features = this.buildFeatures(
       relatedMetrics,
       relatedAnomalies,
       relatedDependencies,
+      errorLogs,
       dto.context,
     );
 
@@ -95,6 +103,13 @@ export class AiService {
       );
     }
 
+    const signalCounts = {
+      anomalies: relatedAnomalies.length,
+      metrics: relatedMetrics.length,
+      dependencies: relatedDependencies.length,
+      errorLogs,
+    };
+
     const saved = await this.predictionsRepository.create({
       createdBy: userId,
       serviceId: service.id,
@@ -107,23 +122,73 @@ export class AiService {
       isAnomaly: result.isAnomaly ?? null,
       anomalyScore: result.anomalyScore ?? null,
       features,
-      signalCounts: {
-        anomalies: relatedAnomalies.length,
-        metrics: relatedMetrics.length,
-        dependencies: relatedDependencies.length,
-      },
+      signalCounts,
       generatedAt: new Date(result.generatedAt),
     });
+
+    if (result.isAnomaly) {
+      const score = result.anomalyScore ?? 0;
+      const candidate = result.predictions[0]?.summary;
+      await this.alertsService.createSafely({
+        title: `Anomalous prediction: ${service.name}`,
+        message: candidate
+          ? `${candidate} (Isolation Forest score=${score.toFixed(2)}; candidate evidence only)`
+          : `Isolation Forest classified this observation as anomalous (score=${score.toFixed(2)}) for "${result.symptom}"`,
+        severity:
+          score >= 0.8 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING,
+        serviceId: service.id,
+        channel: 'in-app',
+      });
+    }
 
     return {
       ...result,
       id: saved.id as string,
-      signalCounts: {
-        anomalies: relatedAnomalies.length,
-        metrics: relatedMetrics.length,
-        dependencies: relatedDependencies.length,
-      },
+      features,
+      signalCounts,
+      debug: dto.debug
+        ? {
+            features,
+            selectedModel: result.model.name,
+            inferenceMs: result.debug?.inferenceMs,
+            requestPayload: {
+              service_id: payload.service_id,
+              service_name: payload.service_name,
+              symptom: payload.symptom,
+              signals: payload.signals,
+              features: payload.features,
+              top_k: payload.top_k,
+            },
+          }
+        : undefined,
     };
+  }
+
+  async getEvaluation(rerun = false): Promise<Record<string, unknown>> {
+    const baseUrl = (
+      this.configService.get<string>('ai.serviceUrl') || 'http://localhost:8001'
+    ).replace(/\/$/, '');
+    const timeoutMs =
+      this.configService.get<number>('ai.timeoutMs') || 10_000;
+
+    try {
+      const { data } = await firstValueFrom(
+        this.httpService.get<Record<string, unknown>>(
+          `${baseUrl}/eval/compare`,
+          { params: { rerun }, timeout: Math.max(timeoutMs, 60_000) },
+        ),
+      );
+      return data;
+    } catch (error) {
+      this.logger.warn(
+        `Offline evaluation unavailable: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'Offline algorithm comparison is unavailable. Start sentinel-ops-ai and retry.',
+      );
+    }
   }
 
   async findAll(
@@ -200,6 +265,7 @@ export class AiService {
         summary: p.summary,
         evidenceId: p.evidence_id || service.id,
         metricName: p.metric_name || undefined,
+        supportingEvidence: p.supporting_evidence || undefined,
       })),
       model: {
         name: data.model.name,
@@ -208,6 +274,19 @@ export class AiService {
       isAnomaly: data.is_anomaly,
       anomalyScore: data.anomaly_score,
       generatedAt: data.generated_at,
+      debug: {
+        features: payload.features,
+        selectedModel: data.model.name,
+        inferenceMs: data.inference_ms,
+        requestPayload: {
+          service_id: payload.service_id,
+          service_name: payload.service_name,
+          symptom: payload.symptom,
+          signals: payload.signals,
+          features: payload.features,
+          top_k: payload.top_k,
+        },
+      },
     };
   }
 
@@ -215,8 +294,9 @@ export class AiService {
     metrics: Array<{ name: string; value: number }>,
     anomalies: Array<{ score: number }>,
     dependencies: Array<{ criticality: string }>,
+    errorLogCount: number,
     context?: Record<string, unknown>,
-  ) {
+  ): OperationalFeatures {
     const byName = (needle: string) =>
       metrics.find((m) => m.name.toLowerCase().includes(needle))?.value;
 
@@ -257,7 +337,7 @@ export class AiService {
       memory_pct: ctxNum('memory_pct') ?? byName('memory') ?? 0,
       anomaly_score: ctxNum('anomaly_score') ?? maxAnomaly,
       dependency_risk: ctxNum('dependency_risk') ?? dependencyRisk,
-      log_error_count: ctxNum('log_error_count') ?? 0,
+      log_error_count: ctxNum('log_error_count') ?? errorLogCount,
     };
   }
 
@@ -280,9 +360,10 @@ export class AiService {
       ...relatedAnomalies.map((anomaly) => ({
         type: 'anomaly' as const,
         confidence: anomaly.score,
-        summary: anomaly.description,
+        summary: `Candidate root cause: ${anomaly.description}`,
         metricName: anomaly.metricName,
         evidenceId: anomaly.id,
+        supportingEvidence: `Correlated anomaly score=${anomaly.score.toFixed(2)} (hypothesis, not causal proof)`,
       })),
       ...relatedDependencies
         .filter(
@@ -292,8 +373,9 @@ export class AiService {
         .map((dep) => ({
           type: 'dependency' as const,
           confidence: dep.criticality === 'critical' ? 0.8 : 0.65,
-          summary: `Potential upstream/downstream impact via ${dep.type} dependency`,
+          summary: `Candidate root cause: ${dep.type} dependency with ${dep.criticality} criticality`,
           evidenceId: dep.id,
+          supportingEvidence: `Related ${dep.type} edge; supporting evidence only`,
         })),
     ]
       .sort((a, b) => b.confidence - a.confidence)
@@ -303,9 +385,11 @@ export class AiService {
       candidates.push({
         type: 'anomaly',
         confidence: 0.4,
-        summary: `Heuristic RCA for "${dto.symptom}" on ${service.name}: AI service unavailable and insufficient correlated signals`,
+        summary: `Candidate root cause unavailable: Isolation Forest service was unreachable and there were insufficient correlated signals for "${dto.symptom}" on ${service.name}`,
         metricName: 'unknown',
         evidenceId: service.id,
+        supportingEvidence:
+          'Heuristic fallback only — not a measured Isolation Forest result',
       });
     }
 
@@ -340,6 +424,7 @@ export class AiService {
       model: doc.modelInfo,
       isAnomaly: doc.isAnomaly ?? undefined,
       anomalyScore: doc.anomalyScore ?? undefined,
+      features: doc.features as unknown as OperationalFeatures,
       signalCounts: doc.signalCounts,
       generatedAt: doc.generatedAt.toISOString(),
     };

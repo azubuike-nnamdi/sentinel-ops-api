@@ -5,6 +5,7 @@ import {
   Prediction,
   PredictionDocument,
 } from '../schemas/prediction.schema';
+import { OperationalFeatures } from '../interfaces/predict.interface';
 
 export interface CreatePredictionData {
   createdBy: string;
@@ -19,6 +20,7 @@ export interface CreatePredictionData {
     summary: string;
     evidenceId: string;
     metricName?: string;
+    supportingEvidence?: string;
   }>;
   modelInfo: {
     name: string;
@@ -26,11 +28,12 @@ export interface CreatePredictionData {
   };
   isAnomaly: boolean | null;
   anomalyScore: number | null;
-  features: Record<string, number>;
+  features: OperationalFeatures;
   signalCounts: {
     anomalies: number;
     metrics: number;
     dependencies: number;
+    errorLogs?: number;
   };
   generatedAt: Date;
 }
@@ -54,7 +57,7 @@ export class PredictionsRepository {
       modelInfo: data.modelInfo,
       isAnomaly: data.isAnomaly,
       anomalyScore: data.anomalyScore,
-      features: data.features,
+      features: { ...data.features } as Record<string, number>,
       signalCounts: data.signalCounts,
       generatedAt: data.generatedAt,
     });

@@ -4,6 +4,31 @@ export interface PredictionCandidate {
   summary: string;
   evidenceId: string;
   metricName?: string;
+  supportingEvidence?: string;
+}
+
+export interface OperationalFeatures {
+  error_rate: number;
+  latency_ms: number;
+  cpu_pct: number;
+  memory_pct: number;
+  anomaly_score: number;
+  dependency_risk: number;
+  log_error_count: number;
+}
+
+export interface PredictDebug {
+  features: OperationalFeatures;
+  selectedModel: string;
+  inferenceMs?: number;
+  requestPayload: {
+    service_id: string;
+    service_name: string;
+    symptom: string;
+    signals: string[];
+    features: OperationalFeatures;
+    top_k: number;
+  };
 }
 
 export interface PredictResult {
@@ -22,11 +47,14 @@ export interface PredictResult {
   };
   isAnomaly?: boolean;
   anomalyScore?: number;
+  features?: OperationalFeatures;
   signalCounts?: {
     anomalies: number;
     metrics: number;
     dependencies: number;
+    errorLogs?: number;
   };
+  debug?: PredictDebug;
   generatedAt: string;
 }
 
@@ -36,15 +64,7 @@ export interface AiPredictRequestPayload {
   service_name: string;
   symptom: string;
   signals: string[];
-  features: {
-    error_rate: number;
-    latency_ms: number;
-    cpu_pct: number;
-    memory_pct: number;
-    anomaly_score: number;
-    dependency_risk: number;
-    log_error_count: number;
-  };
+  features: OperationalFeatures;
   context: Record<string, unknown>;
   top_k: number;
 }
@@ -60,6 +80,7 @@ export interface AiPredictResponsePayload {
     summary: string;
     evidence_id?: string | null;
     metric_name?: string | null;
+    supporting_evidence?: string | null;
   }>;
   model: {
     name: string;
@@ -67,4 +88,5 @@ export interface AiPredictResponsePayload {
     framework?: string;
   };
   generated_at: string;
+  inference_ms?: number;
 }

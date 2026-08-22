@@ -1,13 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsBoolean,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
   IsObject,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 export class PredictDto {
@@ -40,5 +43,15 @@ export class PredictDto {
   })
   @IsOptional()
   @IsNumber()
+  @Min(1)
+  @Max(20)
   topK?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'When true, include feature vector and AI payload in the response (no secrets)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  debug?: boolean;
 }

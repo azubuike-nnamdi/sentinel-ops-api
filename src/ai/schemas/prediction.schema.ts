@@ -42,6 +42,7 @@ export class Prediction {
     summary: string;
     evidenceId: string;
     metricName?: string;
+    supportingEvidence?: string;
   }>;
 
   @Prop({ type: Object, required: true })
