@@ -76,6 +76,50 @@ pnpm start:dev
 
 Default API port is **8000** (`PORT` in `.env`). Start the AI service separately from `../sentinel-ops-ai` on **8001**, and set `AI_SERVICE_URL=http://localhost:8001` in `.env`.
 
+## Architecture
+
+```mermaid
+flowchart TB
+  FE[Next.js :3000]
+  API[NestJS :8000]
+  DB[(MongoDB)]
+  RD[(Redis / BullMQ)]
+  AI[FastAPI :8001]
+  IF[Isolation Forest]
+
+  FE -->|JWT REST| API
+  API --> DB
+  API --> RD
+  API -->|POST /predict| AI
+  AI --> IF
+  AI -->|score + RCA candidates| API
+  API --> FE
+```
+
+Production scoring always uses Isolation Forest. One-Class SVM and LOF are offline comparison models only (`GET /api/v1/ai/evaluation` → FastAPI `GET /eval/compare`).
+
+### Production AI service
+
+```bash
+cd ../sentinel-ops-ai
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python train.py          # fit Isolation Forest → model.pkl
+uvicorn app.main:app --reload --port 8001
+```
+
+### Offline algorithm comparison
+
+```bash
+cd ../sentinel-ops-ai
+python experiments/compare_algorithms.py --rerun
+# artifacts: experiments/results/algorithm_comparison.json
+#            experiments/results/algorithm_comparison.csv
+```
+
+See `docs/ARCHITECTURE.md` and `../sentinel-ops-ai/README.md` for the seven operational features, hyperparameters, and evaluation protocol.
+
 ## Docker
 
 ```bash
@@ -104,9 +148,14 @@ All routes are under `/api/v1`. JWT required unless marked Public.
 | GET / POST | `/incidents` | JWT |
 | PATCH | `/incidents/:id` | JWT |
 | GET | `/alerts` | JWT |
+| PATCH | `/alerts/:id` | JWT |
 | GET | `/dependencies` | JWT |
+| POST | `/dependencies` | JWT + write roles |
 | POST | `/telemetry` | JWT |
 | POST | `/ai/predict` | JWT |
+| GET | `/ai/predictions` | JWT |
+| GET | `/ai/predictions/:id` | JWT |
+| GET | `/ai/evaluation` | JWT (offline IF vs SVM vs LOF; not production scoring) |
 
 ### Example
 

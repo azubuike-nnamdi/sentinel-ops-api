@@ -185,9 +185,11 @@ sentinel-ops-ai/
 │   ├── config.py                    # PORT, MODEL_* hyperparams, MODEL_PATH
 │   ├── routers/
 │   │   ├── health.py                # GET /health, GET /ready
-│   │   └── predict.py               # POST /predict
+│   │   ├── predict.py               # POST /predict
+│   │   └── eval.py                  # GET/POST /eval/compare (offline only)
 │   ├── schemas/predict.py           # FeatureVector, PredictRequest/Response
-│   └── services/isolation_forest.py # train / load / score / RCA ranking
+│   ├── services/isolation_forest.py # train / load / score / RCA ranking
+│   └── evaluation/                  # IF vs SVM vs LOF (not on /predict)
 ├── requirements.txt
 ├── Dockerfile
 └── .env.example
@@ -224,6 +226,21 @@ sequenceDiagram
 
 If FastAPI is unreachable and `AI_FALLBACK_ENABLED=true`, Nest returns heuristic RCA (`mode: rule-based-fallback`).
 
+Offline comparison (not on the production predict path):
+
+```mermaid
+flowchart LR
+  DS[Same 7-feature dataset]
+  DS --> IF[Isolation Forest]
+  DS --> SVM[One-Class SVM]
+  DS --> LOF[LOF]
+  IF --> M[Precision Recall F1 Accuracy ROC-AUC latency]
+  SVM --> M
+  LOF --> M
+```
+
+`GET /eval/compare` on FastAPI and `GET /api/v1/ai/evaluation` on NestJS.
+
 ### Feature vector (Nest → Python)
 
 | Feature | Source (typical) |
@@ -234,16 +251,18 @@ If FastAPI is unreachable and `AI_FALLBACK_ENABLED=true`, Nest returns heuristic
 | `memory_pct` | Metrics named `*memory*` |
 | `anomaly_score` | Max related anomaly score |
 | `dependency_risk` | Max criticality of related deps (`critical`→1 … `low`→0.2) |
-| `log_error_count` | `context.log_error_count` (optional) |
+| `log_error_count` | Error/fatal logs for the service (last 24h) or `context.log_error_count` |
 
 ### Python env (`sentinel-ops-ai/.env`)
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PORT` | `8001` | Bind port |
-| `MODEL_CONTAMINATION` | `0.1` | Isolation Forest contamination |
+| `MODEL_CONTAMINATION` | `0.05` | Isolation Forest contamination |
 | `MODEL_N_ESTIMATORS` | `100` | Number of trees |
+| `MODEL_MAX_SAMPLES` | `256` | Subsample size |
 | `MODEL_RANDOM_STATE` | `42` | Reproducibility |
+| `MODEL_BOOTSTRAP` | `false` | Tree bootstrap |
 | `MODEL_PATH` | `model.pkl` | Persisted model path |
 
 ### Nest env (AI)
