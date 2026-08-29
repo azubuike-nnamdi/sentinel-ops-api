@@ -32,7 +32,21 @@ export class PredictDto {
   @IsString({ each: true })
   signals?: string[];
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({
+    type: Object,
+    example: {
+      dependencies: [
+        {
+          dependency_id: 'inventory-service',
+          dependency_name: 'Inventory Service',
+          error_rate: 0.12,
+          latency_ms: 900,
+          health_status: 'unhealthy',
+          traffic_share: 0.8,
+        },
+      ],
+    },
+  })
   @IsOptional()
   @IsObject()
   context?: Record<string, unknown>;
