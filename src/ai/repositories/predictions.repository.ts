@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { Prediction, PredictionDocument } from '../schemas/prediction.schema';
 import {
-  Prediction,
-  PredictionDocument,
-} from '../schemas/prediction.schema';
-import { OperationalFeatures } from '../interfaces/predict.interface';
+  AiDependencyEvidence,
+  OperationalFeatures,
+} from '../interfaces/predict.interface';
 
 export interface CreatePredictionData {
   createdBy: string;
@@ -21,6 +21,8 @@ export interface CreatePredictionData {
     evidenceId: string;
     metricName?: string;
     supportingEvidence?: string;
+    dependencyId?: string;
+    dependencyName?: string;
   }>;
   modelInfo: {
     name: string;
@@ -29,6 +31,7 @@ export interface CreatePredictionData {
   isAnomaly: boolean | null;
   anomalyScore: number | null;
   features: OperationalFeatures;
+  dependencyEvidence?: AiDependencyEvidence[];
   signalCounts: {
     anomalies: number;
     metrics: number;
@@ -57,7 +60,8 @@ export class PredictionsRepository {
       modelInfo: data.modelInfo,
       isAnomaly: data.isAnomaly,
       anomalyScore: data.anomalyScore,
-      features: { ...data.features } as Record<string, number>,
+      features: { ...data.features },
+      dependencyEvidence: data.dependencyEvidence ?? [],
       signalCounts: data.signalCounts,
       generatedAt: data.generatedAt,
     });
