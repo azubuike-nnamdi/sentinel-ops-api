@@ -14,6 +14,7 @@ import { PaginationQueryDto } from '../common/dto/pagination.dto';
 import { PaginatedResult } from '../common/interfaces';
 import { PaginationUtil } from '../common/utils';
 import { DependenciesService } from '../dependencies/dependencies.service';
+import { IDependency } from '../dependencies/interfaces/dependency.interface';
 import { LogsService } from '../logs/logs.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { ServicesService } from '../services/services.service';
@@ -22,6 +23,7 @@ import { PredictDto } from './dto/predict.dto';
 import {
   AiPredictRequestPayload,
   AiPredictResponsePayload,
+  AiDependencyEvidence,
   OperationalFeatures,
   PredictResult,
   PredictionCandidate,
@@ -62,6 +64,11 @@ export class AiService {
       errorLogs,
       dto.context,
     );
+    const dependencyEvidence = await this.buildDependencyEvidence(
+      dto.serviceId,
+      relatedDependencies,
+      dto.context,
+    );
 
     const payload: AiPredictRequestPayload = {
       service_id: service.id,
@@ -72,6 +79,7 @@ export class AiService {
       context: {
         ...(dto.context || {}),
         serviceStatus: service.status,
+        dependencies: dependencyEvidence,
       },
       top_k: dto.topK ?? 5,
     };
@@ -118,6 +126,7 @@ export class AiService {
       symptom: result.symptom,
       signals: result.signals,
       predictions: result.predictions,
+      dependencyEvidence,
       modelInfo: result.model,
       isAnomaly: result.isAnomaly ?? null,
       anomalyScore: result.anomalyScore ?? null,
@@ -125,6 +134,15 @@ export class AiService {
       signalCounts,
       generatedAt: new Date(result.generatedAt),
     });
+
+    const topDependency = result.predictions.find(
+      (candidate) => candidate.type === 'dependency',
+    );
+    this.logger.log(
+      `AI prediction completed serviceId=${service.id} model=${result.model.name} ` +
+        `isAnomaly=${result.isAnomaly ?? false} anomalyScore=${result.anomalyScore ?? 'n/a'} ` +
+        `topDependencyId=${topDependency?.dependencyId ?? 'none'}`,
+    );
 
     if (result.isAnomaly) {
       const score = result.anomalyScore ?? 0;
@@ -134,8 +152,7 @@ export class AiService {
         message: candidate
           ? `${candidate} (Isolation Forest score=${score.toFixed(2)}; candidate evidence only)`
           : `Isolation Forest classified this observation as anomalous (score=${score.toFixed(2)}) for "${result.symptom}"`,
-        severity:
-          score >= 0.8 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING,
+        severity: score >= 0.8 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING,
         serviceId: service.id,
         channel: 'in-app',
       });
@@ -143,8 +160,9 @@ export class AiService {
 
     return {
       ...result,
-      id: saved.id as string,
+      id: saved.id,
       features,
+      dependencyEvidence,
       signalCounts,
       debug: dto.debug
         ? {
@@ -168,8 +186,7 @@ export class AiService {
     const baseUrl = (
       this.configService.get<string>('ai.serviceUrl') || 'http://localhost:8001'
     ).replace(/\/$/, '');
-    const timeoutMs =
-      this.configService.get<number>('ai.timeoutMs') || 10_000;
+    const timeoutMs = this.configService.get<number>('ai.timeoutMs') || 10_000;
 
     try {
       const { data } = await firstValueFrom(
@@ -266,6 +283,8 @@ export class AiService {
         evidenceId: p.evidence_id || service.id,
         metricName: p.metric_name || undefined,
         supportingEvidence: p.supporting_evidence || undefined,
+        dependencyId: p.dependency_id || undefined,
+        dependencyName: p.dependency_name || undefined,
       })),
       model: {
         name: data.model.name,
@@ -276,6 +295,7 @@ export class AiService {
       generatedAt: data.generated_at,
       debug: {
         features: payload.features,
+        dependencyEvidence: payload.context.dependencies,
         selectedModel: data.model.name,
         inferenceMs: data.inference_ms,
         requestPayload: {
@@ -288,6 +308,75 @@ export class AiService {
         },
       },
     };
+  }
+
+  private async buildDependencyEvidence(
+    serviceId: string,
+    dependencies: IDependency[],
+    context?: Record<string, unknown>,
+  ): Promise<AiDependencyEvidence[]> {
+    if (dependencies.length === 0) {
+      return [];
+    }
+
+    const suppliedDependencies = Array.isArray(context?.dependencies)
+      ? context.dependencies
+      : [];
+    const defaultTrafficShare = 1 / dependencies.length;
+
+    return Promise.all(
+      dependencies.map(async (dependency) => {
+        const relatedServiceId =
+          dependency.sourceServiceId === serviceId
+            ? dependency.targetServiceId
+            : dependency.sourceServiceId;
+        const supplied = suppliedDependencies.find(
+          (item): item is Record<string, unknown> =>
+            typeof item === 'object' &&
+            item !== null &&
+            (item as Record<string, unknown>).dependency_id === dependency.id,
+        );
+
+        try {
+          const [relatedService, relatedMetrics] = await Promise.all([
+            this.servicesService.findById(relatedServiceId),
+            this.metricsService.findByServiceId(relatedServiceId, 50),
+          ]);
+          const metricValue = (needle: string): number =>
+            relatedMetrics.find((metric) =>
+              metric.name.toLowerCase().includes(needle),
+            )?.value ?? 0;
+          const suppliedTrafficShare = supplied?.traffic_share;
+
+          return {
+            dependency_id: dependency.id,
+            dependency_name: relatedService.name,
+            error_rate: metricValue('error'),
+            latency_ms: metricValue('latency'),
+            health_status: relatedService.status,
+            traffic_share:
+              typeof suppliedTrafficShare === 'number' &&
+              Number.isFinite(suppliedTrafficShare)
+                ? Math.max(0, Math.min(1, suppliedTrafficShare))
+                : defaultTrafficShare,
+          };
+        } catch (error) {
+          this.logger.warn(
+            `Could not load telemetry for dependency ${dependency.id}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return {
+            dependency_id: dependency.id,
+            dependency_name: dependency.type,
+            error_rate: 0,
+            latency_ms: 0,
+            health_status: 'unknown' as const,
+            traffic_share: defaultTrafficShare,
+          };
+        }
+      }),
+    );
   }
 
   private buildFeatures(
@@ -367,8 +456,7 @@ export class AiService {
       })),
       ...relatedDependencies
         .filter(
-          (dep) =>
-            dep.criticality === 'critical' || dep.criticality === 'high',
+          (dep) => dep.criticality === 'critical' || dep.criticality === 'high',
         )
         .map((dep) => ({
           type: 'dependency' as const,
@@ -412,9 +500,9 @@ export class AiService {
 
   private toPredictResult(doc: PredictionDocument): PredictResult {
     return {
-      id: doc.id as string,
+      id: doc.id,
       service: {
-        id: (doc.serviceId as Types.ObjectId).toString(),
+        id: doc.serviceId.toString(),
         name: doc.serviceName,
         status: doc.serviceStatus,
       },
@@ -426,6 +514,7 @@ export class AiService {
       anomalyScore: doc.anomalyScore ?? undefined,
       features: doc.features as unknown as OperationalFeatures,
       signalCounts: doc.signalCounts,
+      dependencyEvidence: doc.dependencyEvidence,
       generatedAt: doc.generatedAt.toISOString(),
     };
   }
