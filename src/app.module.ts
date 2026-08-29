@@ -23,6 +23,7 @@ import { MetricsModule } from './metrics/metrics.module';
 import { ServicesModule } from './services/services.module';
 import { TelemetryModule } from './telemetry/telemetry.module';
 import { UsersModule } from './users/users.module';
+import { UsabilityModule } from './usability/usability.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -131,6 +132,7 @@ import { UsersModule } from './users/users.module';
     DashboardModule,
     TelemetryModule,
     AiModule,
+    UsabilityModule,
   ],
   controllers: [HealthController],
   providers: [
