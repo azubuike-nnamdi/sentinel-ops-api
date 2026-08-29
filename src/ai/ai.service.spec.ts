@@ -17,6 +17,9 @@ describe('AiService', () => {
   let httpService: { post: jest.Mock };
   let predictionsRepository: { create: jest.Mock };
   let alertsService: { createSafely: jest.Mock };
+  let servicesService: { findById: jest.Mock };
+  let dependenciesService: { findByServiceId: jest.Mock };
+  let metricsService: { findByServiceId: jest.Mock };
 
   const userId = '507f1f77bcf86cd799439011';
 
@@ -55,6 +58,25 @@ describe('AiService', () => {
     };
 
     alertsService = { createSafely: jest.fn().mockResolvedValue(null) };
+    servicesService = {
+      findById: jest.fn().mockResolvedValue({
+        id: 's1',
+        name: 'Payment Gateway',
+        status: ServiceStatus.DEGRADED,
+      }),
+    };
+    dependenciesService = {
+      findByServiceId: jest.fn().mockResolvedValue([]),
+    };
+    metricsService = {
+      findByServiceId: jest.fn().mockResolvedValue([
+        {
+          serviceId: 's1',
+          name: 'latency_ms',
+          value: 900,
+        },
+      ]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -73,13 +95,7 @@ describe('AiService', () => {
         },
         {
           provide: ServicesService,
-          useValue: {
-            findById: jest.fn().mockResolvedValue({
-              id: 's1',
-              name: 'Payment Gateway',
-              status: ServiceStatus.DEGRADED,
-            }),
-          },
+          useValue: servicesService,
         },
         {
           provide: AnomaliesService,
@@ -97,21 +113,11 @@ describe('AiService', () => {
         },
         {
           provide: DependenciesService,
-          useValue: {
-            findByServiceId: jest.fn().mockResolvedValue([]),
-          },
+          useValue: dependenciesService,
         },
         {
           provide: MetricsService,
-          useValue: {
-            findByServiceId: jest.fn().mockResolvedValue([
-              {
-                serviceId: 's1',
-                name: 'latency_ms',
-                value: 900,
-              },
-            ]),
-          },
+          useValue: metricsService,
         },
         {
           provide: LogsService,
@@ -150,9 +156,11 @@ describe('AiService', () => {
     expect(result.isAnomaly).toBe(true);
     expect(result.anomalyScore).toBe(0.91);
     expect(result.id).toBe('pred1');
-    const posted = httpService.post.mock.calls[0][1] as {
-      features: Record<string, number>;
-    };
+    const postedCall = httpService.post.mock.calls[0] as unknown as [
+      string,
+      { features: Record<string, number> },
+    ];
+    const posted = postedCall[1];
     expect(posted.features).toEqual(
       expect.objectContaining({
         latency_ms: 900,
@@ -167,6 +175,73 @@ describe('AiService', () => {
         serviceId: 's1',
       }),
     );
+  });
+
+  it('sends dependency telemetry and persists dependency evidence', async () => {
+    servicesService.findById.mockImplementation((id: string) =>
+      id === 's1'
+        ? {
+            id: 's1',
+            name: 'Payment Gateway',
+            status: ServiceStatus.DEGRADED,
+          }
+        : {
+            id,
+            name: 'Inventory Service',
+            status: ServiceStatus.UNHEALTHY,
+          },
+    );
+    dependenciesService.findByServiceId.mockImplementation((id: string) =>
+      id === 's1'
+        ? [
+            {
+              id: 'dep-1',
+              sourceServiceId: 's1',
+              targetServiceId: 's2',
+              type: 'http',
+              criticality: 'high',
+            },
+          ]
+        : [],
+    );
+    metricsService.findByServiceId.mockImplementation((id: string) =>
+      id === 's1'
+        ? [{ name: 'latency_ms', value: 900 }]
+        : [
+            { name: 'error_rate', value: 0.12 },
+            { name: 'latency_ms', value: 800 },
+          ],
+    );
+
+    const result = await service.predict(
+      {
+        serviceId: 's1',
+        symptom: 'Checkout is slow',
+      },
+      userId,
+    );
+
+    const postedCall = httpService.post.mock.calls[0] as unknown as [
+      string,
+      { context: { dependencies: Array<Record<string, unknown>> } },
+    ];
+    const posted = postedCall[1];
+    expect(posted.context.dependencies).toEqual([
+      expect.objectContaining({
+        dependency_id: 'dep-1',
+        dependency_name: 'Inventory Service',
+        error_rate: 0.12,
+        latency_ms: 800,
+        health_status: ServiceStatus.UNHEALTHY,
+        traffic_share: 1,
+      }),
+    ]);
+    expect(result.dependencyEvidence?.[0].dependency_id).toBe('dep-1');
+    const [savedCall] = predictionsRepository.create.mock.calls as unknown as [
+      [{ dependencyEvidence: Array<{ dependency_id: string }> }],
+    ];
+    const saved = savedCall[0];
+    expect(saved.dependencyEvidence[0].dependency_id).toBe('dep-1');
   });
 
   it('falls back to heuristic when AI service fails', async () => {
