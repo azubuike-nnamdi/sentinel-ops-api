@@ -43,6 +43,8 @@ export class Prediction {
     evidenceId: string;
     metricName?: string;
     supportingEvidence?: string;
+    dependencyId?: string;
+    dependencyName?: string;
   }>;
 
   @Prop({ type: Object, required: true })
@@ -66,6 +68,16 @@ export class Prediction {
     metrics: number;
     dependencies: number;
   };
+
+  @Prop({ type: [Object], default: [] })
+  dependencyEvidence!: Array<{
+    dependency_id: string;
+    dependency_name?: string;
+    error_rate: number;
+    latency_ms: number;
+    health_status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+    traffic_share: number;
+  }>;
 
   @Prop({ required: true })
   generatedAt!: Date;
