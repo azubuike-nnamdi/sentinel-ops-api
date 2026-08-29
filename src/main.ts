@@ -103,6 +103,7 @@ async function bootstrap(): Promise<void> {
       .addTag('Dashboard', 'Operational dashboards')
       .addTag('Telemetry', 'Telemetry ingestion')
       .addTag('AI', 'AI-assisted root cause analysis')
+      .addTag('Usability', 'Privacy-safe research usability measurements')
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);
