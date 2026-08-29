@@ -2,13 +2,13 @@
 
 AI-Based Incident Detection and Automated Root Cause Analysis Platform for Distributed Enterprise Applications.
 
-| | |
-|---|---|
-| **API base** | `http://localhost:8000/api/v1` |
-| **Swagger** | `http://localhost:8000/docs` |
-| **AI service** | FastAPI Isolation Forest at `http://localhost:8001` (`sentinel-ops-ai`) |
-| **Stack** | NestJS 11 · TypeScript · MongoDB · Redis · BullMQ · JWT · OpenTelemetry · FastAPI/sklearn |
-| **Style** | Clean Architecture + DDD feature modules |
+|                |                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| **API base**   | `http://localhost:8000/api/v1`                                                            |
+| **Swagger**    | `http://localhost:8000/docs`                                                              |
+| **AI service** | FastAPI Isolation Forest at `http://localhost:8001` (`sentinel-ops-ai`)                   |
+| **Stack**      | NestJS 11 · TypeScript · MongoDB · Redis · BullMQ · JWT · OpenTelemetry · FastAPI/sklearn |
+| **Style**      | Clean Architecture + DDD feature modules                                                  |
 
 ---
 
@@ -85,6 +85,7 @@ flowchart TB
     DET[Anomalies · Incidents · Alerts]
     DEP[Dependencies]
     INS[Dashboard · AI predict]
+    USE[Usability research measurements]
   end
 
   subgraph AiService["Python AI — FastAPI :8001 · sentinel-ops-ai"]
@@ -114,11 +115,36 @@ flowchart TB
   SVC --> TEL --> DET --> INS
   DEP --> INS
   INS -->|"HTTP feature vector"| PRED
+  USE -->|"aggregate-only research view"| MONGO
   PRED --> IF
   IF -->|"is_anomaly · RCA candidates"| PRED
   PRED -->|"JSON response"| INS
   TRAIN -.->|"writes model.pkl"| IF
   AiService --- HEALTHAI
+```
+
+### First-party usability measurement
+
+Usability instrumentation is deliberately separate from operational logs and
+metrics. Authenticated Next.js tasks post bounded events to
+`/api/v1/usability/events`; the actor is derived from the JWT and the browser
+cannot provide a user ID. The API allowlists event names, task IDs, route keys,
+durations, and a small set of safe dimensions. `usability_events` and
+`usability_surveys` use 90-day TTL indexes.
+
+`GET /api/v1/usability/summary` is restricted to `admin`, `super_admin`, and
+`devops` roles and returns aggregate task, Web Vital, and SUS measures. Raw
+events and SUS answers are not returned by the reporting endpoint.
+
+```mermaid
+flowchart LR
+  UI[Operator task boundaries] --> EVT[POST /usability/events]
+  SURVEY[Consented SUS questionnaire] --> SUS[POST /usability/surveys/sus]
+  EVT --> EVENTS[(usability_events)]
+  SUS --> RESP[(usability_surveys)]
+  EVENTS --> SUMMARY[Aggregate summary]
+  RESP --> SUMMARY
+  SUMMARY --> REPORT[Admin / DevOps research view]
 ```
 
 ---
@@ -156,15 +182,15 @@ flowchart LR
 
 The ML path is a **separate microservice** at `~/Desktop/projects/miva/sentinel-ops-ai`, not embedded in NestJS or Next.js.
 
-| | |
-|---|---|
-| **Repo / folder** | `../sentinel-ops-ai` |
-| **Runtime** | Python 3.11–3.13 · FastAPI · Uvicorn · joblib |
-| **Model** | `sklearn.ensemble.IsolationForest` (`sentinelops-isolation-forest-v1`) |
-| **Artifact** | `model.pkl` (persisted; path via `MODEL_PATH`) |
-| **Offline train** | `python train.py` |
-| **Base URL** | `AI_SERVICE_URL` (default `http://localhost:8001`) |
-| **Docs** | http://localhost:8001/docs |
+|                   |                                                                        |
+| ----------------- | ---------------------------------------------------------------------- |
+| **Repo / folder** | `../sentinel-ops-ai`                                                   |
+| **Runtime**       | Python 3.11–3.13 · FastAPI · Uvicorn · joblib                          |
+| **Model**         | `sklearn.ensemble.IsolationForest` (`sentinelops-isolation-forest-v1`) |
+| **Artifact**      | `model.pkl` (persisted; path via `MODEL_PATH`)                         |
+| **Offline train** | `python train.py`                                                      |
+| **Base URL**      | `AI_SERVICE_URL` (default `http://localhost:8001`)                     |
+| **Docs**          | http://localhost:8001/docs                                             |
 
 ### Three-app layout
 
@@ -197,12 +223,12 @@ sentinel-ops-ai/
 
 ### Training vs inference
 
-| Step | Where | What happens |
-|------|--------|--------------|
-| **Train** | `python train.py` (or auto on first API boot) | Fit Isolation Forest on ~800 synthetic healthy samples → write `model.pkl` |
-| **Load** | FastAPI lifespan | `load_or_train_model()` loads `model.pkl`; trains+saves if missing |
-| **Predict** | Nest `POST /ai/predict` → AI `POST /predict` | Score feature vector; return `is_anomaly`, `anomaly_score`, ranked RCA candidates |
-| **Retrain** | Re-run `train.py`, then **restart** FastAPI | Nest needs no code change |
+| Step        | Where                                         | What happens                                                                      |
+| ----------- | --------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Train**   | `python train.py` (or auto on first API boot) | Fit Isolation Forest on ~800 synthetic healthy samples → write `model.pkl`        |
+| **Load**    | FastAPI lifespan                              | `load_or_train_model()` loads `model.pkl`; trains+saves if missing                |
+| **Predict** | Nest `POST /ai/predict` → AI `POST /predict`  | Score feature vector; return `is_anomaly`, `anomaly_score`, ranked RCA candidates |
+| **Retrain** | Re-run `train.py`, then **restart** FastAPI   | Nest needs no code change                                                         |
 
 ### Predict sequence
 
@@ -243,35 +269,35 @@ flowchart LR
 
 ### Feature vector (Nest → Python)
 
-| Feature | Source (typical) |
-|---------|------------------|
-| `error_rate` | Metrics named `*error*` or `context.error_rate` |
-| `latency_ms` | Metrics named `*latency*` or `context.latency_ms` |
-| `cpu_pct` | Metrics named `*cpu*` |
-| `memory_pct` | Metrics named `*memory*` |
-| `anomaly_score` | Max related anomaly score |
-| `dependency_risk` | Max criticality of related deps (`critical`→1 … `low`→0.2) |
+| Feature           | Source (typical)                                                         |
+| ----------------- | ------------------------------------------------------------------------ |
+| `error_rate`      | Metrics named `*error*` or `context.error_rate`                          |
+| `latency_ms`      | Metrics named `*latency*` or `context.latency_ms`                        |
+| `cpu_pct`         | Metrics named `*cpu*`                                                    |
+| `memory_pct`      | Metrics named `*memory*`                                                 |
+| `anomaly_score`   | Max related anomaly score                                                |
+| `dependency_risk` | Max criticality of related deps (`critical`→1 … `low`→0.2)               |
 | `log_error_count` | Error/fatal logs for the service (last 24h) or `context.log_error_count` |
 
 ### Python env (`sentinel-ops-ai/.env`)
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PORT` | `8001` | Bind port |
-| `MODEL_CONTAMINATION` | `0.05` | Isolation Forest contamination |
-| `MODEL_N_ESTIMATORS` | `100` | Number of trees |
-| `MODEL_MAX_SAMPLES` | `256` | Subsample size |
-| `MODEL_RANDOM_STATE` | `42` | Reproducibility |
-| `MODEL_BOOTSTRAP` | `false` | Tree bootstrap |
-| `MODEL_PATH` | `model.pkl` | Persisted model path |
+| Variable              | Default     | Purpose                        |
+| --------------------- | ----------- | ------------------------------ |
+| `PORT`                | `8001`      | Bind port                      |
+| `MODEL_CONTAMINATION` | `0.05`      | Isolation Forest contamination |
+| `MODEL_N_ESTIMATORS`  | `100`       | Number of trees                |
+| `MODEL_MAX_SAMPLES`   | `256`       | Subsample size                 |
+| `MODEL_RANDOM_STATE`  | `42`        | Reproducibility                |
+| `MODEL_BOOTSTRAP`     | `false`     | Tree bootstrap                 |
+| `MODEL_PATH`          | `model.pkl` | Persisted model path           |
 
 ### Nest env (AI)
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `AI_SERVICE_URL` | `http://localhost:8001` | FastAPI base URL |
-| `AI_SERVICE_TIMEOUT_MS` | `10000` | HTTP client timeout |
-| `AI_FALLBACK_ENABLED` | `true` | Heuristic fallback when AI is down |
+| Variable                | Default                 | Purpose                            |
+| ----------------------- | ----------------------- | ---------------------------------- |
+| `AI_SERVICE_URL`        | `http://localhost:8001` | FastAPI base URL                   |
+| `AI_SERVICE_TIMEOUT_MS` | `10000`                 | HTTP client timeout                |
+| `AI_FALLBACK_ENABLED`   | `true`                  | Heuristic fallback when AI is down |
 
 Full Python API contract: **`sentinel-ops-ai/README.md`**.
 
@@ -281,14 +307,14 @@ Full Python API contract: **`sentinel-ops-ai/README.md`**.
 
 Every HTTP request passes through this pipeline:
 
-| Step | Stage | Components |
-|------|--------|------------|
-| 1 | Ingress | Helmet, compression, CORS, request-id middleware, Pino |
-| 2 | Routing | Global prefix `/api/v1` + feature controllers |
-| 3 | Guards | `ThrottlerGuard` → `JwtAuthGuard` → `RolesGuard` |
-| 4 | Validation | Global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`) |
-| 5 | Application | Controller → Service → Repository (where used) |
-| 6 | Response | `ResponseInterceptor` + `GlobalExceptionFilter` |
+| Step | Stage       | Components                                                                 |
+| ---- | ----------- | -------------------------------------------------------------------------- |
+| 1    | Ingress     | Helmet, compression, CORS, request-id middleware, Pino                     |
+| 2    | Routing     | Global prefix `/api/v1` + feature controllers                              |
+| 3    | Guards      | `ThrottlerGuard` → `JwtAuthGuard` → `RolesGuard`                           |
+| 4    | Validation  | Global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`) |
+| 5    | Application | Controller → Service → Repository (where used)                             |
+| 6    | Response    | `ResponseInterceptor` + `GlobalExceptionFilter`                            |
 
 ### Standard API envelope
 
@@ -306,36 +332,36 @@ Every HTTP request passes through this pipeline:
 
 ## 6. Module map
 
-| Module | Domain layer | Responsibility |
-|--------|--------------|----------------|
-| **Common** | Platform | Enums, DTOs, decorators, filters, interceptors, utils, health |
-| **Config** | Platform | App, DB, JWT, Redis, throttler, OTEL, **AI** config namespaces |
-| **Database** | Platform | MongoDB / Mongoose root connection |
-| **Shared** | Platform | OTEL bootstrap and shared exports |
-| **Auth** | Identity | Register, login, JWT strategy, global guards |
-| **Users** | Identity | User CRUD, bcrypt hashing, roles |
-| **Services** | Domain | Monitored service registry |
-| **Logs** | Telemetry | Log ingest and query |
-| **Metrics** | Telemetry | Metric datapoint ingest and query |
-| **Telemetry** | Telemetry | Batch ingest of logs + metrics |
-| **Anomalies** | Detection | Detected anomaly records |
-| **Incidents** | Detection | Incident lifecycle including `PATCH /incidents/:id` |
-| **Alerts** | Detection | Alert listing / status |
-| **Dependencies** | Topology | Service dependency graph |
-| **Dashboard** | Insights | Aggregated operational summary |
-| **AI** | Insights | HTTP client to FastAPI Isolation Forest (`POST /ai/predict`) |
+| Module           | Domain layer | Responsibility                                                 |
+| ---------------- | ------------ | -------------------------------------------------------------- |
+| **Common**       | Platform     | Enums, DTOs, decorators, filters, interceptors, utils, health  |
+| **Config**       | Platform     | App, DB, JWT, Redis, throttler, OTEL, **AI** config namespaces |
+| **Database**     | Platform     | MongoDB / Mongoose root connection                             |
+| **Shared**       | Platform     | OTEL bootstrap and shared exports                              |
+| **Auth**         | Identity     | Register, login, JWT strategy, global guards                   |
+| **Users**        | Identity     | User CRUD, bcrypt hashing, roles                               |
+| **Services**     | Domain       | Monitored service registry                                     |
+| **Logs**         | Telemetry    | Log ingest and query                                           |
+| **Metrics**      | Telemetry    | Metric datapoint ingest and query                              |
+| **Telemetry**    | Telemetry    | Batch ingest of logs + metrics                                 |
+| **Anomalies**    | Detection    | Detected anomaly records                                       |
+| **Incidents**    | Detection    | Incident lifecycle including `PATCH /incidents/:id`            |
+| **Alerts**       | Detection    | Alert listing / status                                         |
+| **Dependencies** | Topology     | Service dependency graph                                       |
+| **Dashboard**    | Insights     | Aggregated operational summary                                 |
+| **AI**           | Insights     | HTTP client to FastAPI Isolation Forest (`POST /ai/predict`)   |
 
 ### Module conventions
 
 Each feature module typically contains:
 
-- `controller` — HTTP adapters only  
-- `service` — business logic  
-- `dto` — validated request/response shapes  
-- `schema` — Mongoose schemas  
-- `interface` — domain contracts  
-- `repository` — persistence (when needed)  
-- `*.spec.ts` — unit tests  
+- `controller` — HTTP adapters only
+- `service` — business logic
+- `dto` — validated request/response shapes
+- `schema` — Mongoose schemas
+- `interface` — domain contracts
+- `repository` — persistence (when needed)
+- `*.spec.ts` — unit tests
 
 ---
 
@@ -354,11 +380,11 @@ RolesGuard    ──@Roles(...)──► enforce Administrator / DevOps / Operat
 Controller / Service
 ```
 
-| Role | Typical access |
-|------|----------------|
-| **Administrator** | Full management (users, services, configuration-sensitive ops) |
-| **DevOps Engineer** | Operational write + read across monitoring domains |
-| **Operator** | Read-heavy operational access; limited writes |
+| Role                | Typical access                                                 |
+| ------------------- | -------------------------------------------------------------- |
+| **Administrator**   | Full management (users, services, configuration-sensitive ops) |
+| **DevOps Engineer** | Operational write + read across monitoring domains             |
+| **Operator**        | Read-heavy operational access; limited writes                  |
 
 Password hashing uses **bcrypt**. Tokens are issued as access + refresh JWTs.
 
@@ -368,25 +394,25 @@ Password hashing uses **bcrypt**. Tokens are issued as access + refresh JWTs.
 
 All routes are under `/api/v1` unless noted. JWT required except Public routes.
 
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/health` | Public |
-| GET | `/health/ready` | Public |
-| POST | `/auth/register` | Public |
-| POST | `/auth/login` | Public |
-| GET | `/auth/me` | JWT |
-| CRUD | `/users` | JWT + Roles |
-| GET | `/dashboard` | JWT |
-| GET / POST | `/services` | JWT |
-| GET / POST | `/logs` | JWT |
-| GET / POST | `/metrics` | JWT |
-| GET / POST | `/anomalies` | JWT |
-| GET / POST | `/incidents` | JWT |
-| PATCH | `/incidents/:id` | JWT |
-| GET | `/alerts` | JWT |
-| GET | `/dependencies` | JWT |
-| POST | `/telemetry` | JWT |
-| POST | `/ai/predict` | JWT → FastAPI `:8001/predict` |
+| Method     | Path             | Auth                          |
+| ---------- | ---------------- | ----------------------------- |
+| GET        | `/health`        | Public                        |
+| GET        | `/health/ready`  | Public                        |
+| POST       | `/auth/register` | Public                        |
+| POST       | `/auth/login`    | Public                        |
+| GET        | `/auth/me`       | JWT                           |
+| CRUD       | `/users`         | JWT + Roles                   |
+| GET        | `/dashboard`     | JWT                           |
+| GET / POST | `/services`      | JWT                           |
+| GET / POST | `/logs`          | JWT                           |
+| GET / POST | `/metrics`       | JWT                           |
+| GET / POST | `/anomalies`     | JWT                           |
+| GET / POST | `/incidents`     | JWT                           |
+| PATCH      | `/incidents/:id` | JWT                           |
+| GET        | `/alerts`        | JWT                           |
+| GET        | `/dependencies`  | JWT                           |
+| POST       | `/telemetry`     | JWT                           |
+| POST       | `/ai/predict`    | JWT → FastAPI `:8001/predict` |
 
 Swagger UI: `/docs` (not under the `/api/v1` prefix).
 
@@ -396,15 +422,15 @@ Swagger UI: `/docs` (not under the `/api/v1` prefix).
 
 ### MongoDB collections
 
-| Collection | Owner module |
-|------------|--------------|
-| `users` | Users |
-| `services` | Services |
-| `logs` | Logs |
-| `metrics` | Metrics |
-| `anomalies` | Anomalies |
-| `incidents` | Incidents |
-| `alerts` | Alerts |
+| Collection     | Owner module |
+| -------------- | ------------ |
+| `users`        | Users        |
+| `services`     | Services     |
+| `logs`         | Logs         |
+| `metrics`      | Metrics      |
+| `anomalies`    | Anomalies    |
+| `incidents`    | Incidents    |
+| `alerts`       | Alerts       |
 | `dependencies` | Dependencies |
 
 ### Redis + BullMQ
@@ -452,12 +478,12 @@ src/
 
 ## 11. Design principles
 
-1. **SOLID** — prefer small services, constructor injection, interface-driven contracts.  
-2. **Thin controllers** — HTTP mapping and DTO binding only.  
-3. **Domain in services** — orchestration and business rules.  
-4. **Repository pattern** — isolate Mongoose access where complexity warrants it.  
-5. **Fail safely** — global exception filter; production hides internal stacks; AI has optional heuristic fallback.  
-6. **Observable by default** — request IDs, structured Pino logs, optional OTEL traces.  
+1. **SOLID** — prefer small services, constructor injection, interface-driven contracts.
+2. **Thin controllers** — HTTP mapping and DTO binding only.
+3. **Domain in services** — orchestration and business rules.
+4. **Repository pattern** — isolate Mongoose access where complexity warrants it.
+5. **Fail safely** — global exception filter; production hides internal stacks; AI has optional heuristic fallback.
+6. **Observable by default** — request IDs, structured Pino logs, optional OTEL traces.
 7. **ML as a sidecar** — Isolation Forest lives in Python; Nest remains the API gateway.
 
 ---
@@ -478,12 +504,12 @@ cp .env.example .env   # set MONGODB_URI, JWT, AI_SERVICE_URL=http://localhost:8
 pnpm start:dev
 ```
 
-| Resource | URL |
-|----------|-----|
-| API | `http://localhost:8000/api/v1` |
-| Health | `http://localhost:8000/api/v1/health` |
-| Docs | `http://localhost:8000/docs` |
-| AI service | `http://localhost:8001` |
-| AI OpenAPI | `http://localhost:8001/docs` |
+| Resource   | URL                                   |
+| ---------- | ------------------------------------- |
+| API        | `http://localhost:8000/api/v1`        |
+| Health     | `http://localhost:8000/api/v1/health` |
+| Docs       | `http://localhost:8000/docs`          |
+| AI service | `http://localhost:8001`               |
+| AI OpenAPI | `http://localhost:8001/docs`          |
 
 Frontend origins expected for CORS: `http://localhost:3000`, `http://localhost:3001` (and matching `127.0.0.1` variants as configured).
