@@ -9,6 +9,7 @@ AI-Based Incident Detection and Automated Root Cause Analysis Platform for Distr
 Production-ready NestJS backend following Clean Architecture / DDD with feature modules, repository pattern, JWT auth, standardized API responses, Swagger docs, and Docker support.
 
 ### Foundation
+
 - NestJS 11 + TypeScript + pnpm
 - MongoDB (Mongoose) + Redis + BullMQ wiring
 - Global validation (`class-validator` / `class-transformer`)
@@ -21,24 +22,27 @@ Production-ready NestJS backend following Clean Architecture / DDD with feature 
 - Swagger UI
 
 ### Modules completed
-| Module | Responsibility |
-|--------|----------------|
-| **Common** | Shared enums, DTOs, decorators, filters, interceptors, utils |
-| **Config / Database / Shared** | Env config namespaces, Mongo connection, OTEL bootstrap |
-| **Users** | User CRUD, bcrypt hashing, roles |
-| **Auth** | Register, login, JWT + Roles guards |
-| **Services** | Register/list monitored services |
-| **Logs** | Ingest and query application logs |
-| **Metrics** | Ingest and query service metrics |
-| **Anomalies** | Record and list detected anomalies |
-| **Incidents** | List/create incidents; patch status/RCA fields |
-| **Alerts** | List alerts |
-| **Dependencies** | Service dependency graph |
-| **Dashboard** | Aggregated operational summary |
-| **Telemetry** | Batch ingest logs + metrics |
-| **AI** | Isolation Forest RCA via FastAPI (`POST /ai/predict` → `:8001`) |
+
+| Module                         | Responsibility                                                            |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| **Common**                     | Shared enums, DTOs, decorators, filters, interceptors, utils              |
+| **Config / Database / Shared** | Env config namespaces, Mongo connection, OTEL bootstrap                   |
+| **Users**                      | User CRUD, bcrypt hashing, roles                                          |
+| **Auth**                       | Register, login, JWT + Roles guards                                       |
+| **Services**                   | Register/list monitored services                                          |
+| **Logs**                       | Ingest and query application logs                                         |
+| **Metrics**                    | Ingest and query service metrics                                          |
+| **Anomalies**                  | Record and list detected anomalies                                        |
+| **Incidents**                  | List/create incidents; patch status/RCA fields                            |
+| **Alerts**                     | List alerts                                                               |
+| **Dependencies**               | Service dependency graph                                                  |
+| **Dashboard**                  | Aggregated operational summary                                            |
+| **Telemetry**                  | Batch ingest logs + metrics                                               |
+| **AI**                         | Isolation Forest RCA via FastAPI (`POST /ai/predict` → `:8001`)           |
+| **Usability**                  | Privacy-safe task events, SUS responses, and aggregate research summaries |
 
 ### Roles
+
 - `super_admin`
 - `admin`
 - `devops`
@@ -66,12 +70,12 @@ pnpm start:dev
 
 ### Local URLs
 
-| Resource | URL |
-|----------|-----|
-| **API base** | `http://localhost:8000/api/v1` |
-| Health | `http://localhost:8000/api/v1/health` |
-| Readiness | `http://localhost:8000/api/v1/health/ready` |
-| Swagger | `http://localhost:8000/docs` |
+| Resource       | URL                                                |
+| -------------- | -------------------------------------------------- |
+| **API base**   | `http://localhost:8000/api/v1`                     |
+| Health         | `http://localhost:8000/api/v1/health`              |
+| Readiness      | `http://localhost:8000/api/v1/health/ready`        |
+| Swagger        | `http://localhost:8000/docs`                       |
 | **AI service** | `http://localhost:8001` (FastAPI Isolation Forest) |
 
 Default API port is **8000** (`PORT` in `.env`). Start the AI service separately from `../sentinel-ops-ai` on **8001**, and set `AI_SERVICE_URL=http://localhost:8001` in `.env`.
@@ -132,30 +136,34 @@ API is published on host port `8000` by default.
 
 All routes are under `/api/v1`. JWT required unless marked Public.
 
-| Method | Path | Auth |
-|--------|------|------|
-| GET | `/health` | Public |
-| GET | `/health/ready` | Public |
-| POST | `/auth/register` | Public |
-| POST | `/auth/login` | Public |
-| GET | `/auth/me` | JWT |
-| GET/POST/PATCH/DELETE | `/users` | JWT + Roles |
-| GET | `/dashboard` | JWT |
-| GET / POST | `/services` | JWT |
-| GET / POST | `/logs` | JWT |
-| GET / POST | `/metrics` | JWT |
-| GET / POST | `/anomalies` | JWT |
-| GET / POST | `/incidents` | JWT |
-| PATCH | `/incidents/:id` | JWT |
-| GET | `/alerts` | JWT |
-| PATCH | `/alerts/:id` | JWT |
-| GET | `/dependencies` | JWT |
-| POST | `/dependencies` | JWT + write roles |
-| POST | `/telemetry` | JWT |
-| POST | `/ai/predict` | JWT |
-| GET | `/ai/predictions` | JWT |
-| GET | `/ai/predictions/:id` | JWT |
-| GET | `/ai/evaluation` | JWT (offline IF vs SVM vs LOF; not production scoring) |
+| Method                | Path                     | Auth                                                   |
+| --------------------- | ------------------------ | ------------------------------------------------------ |
+| GET                   | `/health`                | Public                                                 |
+| GET                   | `/health/ready`          | Public                                                 |
+| POST                  | `/auth/register`         | Public                                                 |
+| POST                  | `/auth/login`            | Public                                                 |
+| GET                   | `/auth/me`               | JWT                                                    |
+| GET/POST/PATCH/DELETE | `/users`                 | JWT + Roles                                            |
+| GET                   | `/dashboard`             | JWT                                                    |
+| GET / POST            | `/services`              | JWT                                                    |
+| GET / POST            | `/logs`                  | JWT                                                    |
+| GET / POST            | `/metrics`               | JWT                                                    |
+| GET / POST            | `/anomalies`             | JWT                                                    |
+| GET / POST            | `/incidents`             | JWT                                                    |
+| PATCH                 | `/incidents/:id`         | JWT                                                    |
+| GET                   | `/alerts`                | JWT                                                    |
+| PATCH                 | `/alerts/:id`            | JWT                                                    |
+| GET                   | `/dependencies`          | JWT                                                    |
+| POST                  | `/dependencies`          | JWT + write roles                                      |
+| POST                  | `/telemetry`             | JWT                                                    |
+| POST                  | `/ai/predict`            | JWT                                                    |
+| GET                   | `/ai/predictions`        | JWT                                                    |
+| GET                   | `/ai/predictions/:id`    | JWT                                                    |
+| GET                   | `/ai/evaluation`         | JWT (offline IF vs SVM vs LOF; not production scoring) |
+| POST                  | `/usability/events`      | JWT (bounded first-party task/vital event)             |
+| POST                  | `/usability/surveys/sus` | JWT + consent (standard SUS response)                  |
+| GET                   | `/usability/summary`     | JWT + admin/devops (aggregate results only)            |
+| DELETE                | `/usability/events/me`   | JWT (delete current actor's usability data)            |
 
 ### Example
 
@@ -180,6 +188,42 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
   }'
 ```
 
+## Research usability measurement
+
+Usability measurement is a first-party path separate from logs, metrics, and
+OpenTelemetry. The frontend records only allowlisted task boundaries and
+rounded Web Vitals; it never sends symptoms, log messages, form values,
+headers, URLs, or debug prediction payloads. Events are retained for 90 days
+with a MongoDB TTL index.
+
+The measured task set is:
+
+- T1: detect and diagnose — open the dashboard and inspect an alert.
+- T2: run prediction — submit a prediction and view its evidence.
+- T3: create/track incident — create an incident and verify the operational view.
+
+The authorized usability summary reports completion, abandonment, validation
+and error rates, median/p95 time-on-task, Web Vital samples, SUS response count,
+and measured SUS average. “No data” is returned/displayed when evidence does
+not exist. SUS uses the ten standard questions and the odd/even transformation
+to a 0–100 score; consent is required and optional feedback is bounded.
+
+Repeatable study protocol:
+
+1. Use an authenticated operator or administrator in a fixed browser and API
+   environment, and assign a rotating study session code such as `participant-01`.
+2. Observe the participant performing T1, T2, and T3. Start timing when the
+   task instruction is given and stop when the stated success criterion is met.
+3. T1 succeeds when an active alert is opened; T2 succeeds when a prediction
+   succeeds and its result is viewed; T3 succeeds when incident creation
+   succeeds. Record observed deviations separately from automated events.
+4. Have the participant complete SUS on the frontend `/usability` page, provide
+   consent, and optionally add feedback.
+5. An authorized admin/devops user can use the same page or
+   `GET /api/v1/usability/summary` with a bounded date range to export measured
+   values for the dissertation. Automated events support measurement but do not
+   replace observing real participants.
+
 ## Project structure
 
 ```text
@@ -196,6 +240,7 @@ src/
   dashboard/
   telemetry/
   ai/
+  usability/
   common/
   config/
   database/
@@ -204,16 +249,16 @@ src/
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `pnpm start:dev` | Watch mode (port 8000) |
-| `pnpm build` | Compile |
-| `pnpm start:prod` | Run compiled build |
-| `pnpm test` | Unit tests |
-| `pnpm test:e2e` | E2E tests |
-| `pnpm lint` | ESLint |
-| `pnpm docker:up` | Start docker-compose |
-| `pnpm docker:down` | Stop docker-compose |
+| Command            | Description            |
+| ------------------ | ---------------------- |
+| `pnpm start:dev`   | Watch mode (port 8000) |
+| `pnpm build`       | Compile                |
+| `pnpm start:prod`  | Run compiled build     |
+| `pnpm test`        | Unit tests             |
+| `pnpm test:e2e`    | E2E tests              |
+| `pnpm lint`        | ESLint                 |
+| `pnpm docker:up`   | Start docker-compose   |
+| `pnpm docker:down` | Stop docker-compose    |
 
 ## Response format
 
