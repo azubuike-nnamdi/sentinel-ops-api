@@ -1,3 +1,12 @@
+export interface AiDependencyEvidence {
+  dependency_id: string;
+  dependency_name?: string;
+  error_rate: number;
+  latency_ms: number;
+  health_status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+  traffic_share: number;
+}
+
 export interface PredictionCandidate {
   type: 'anomaly' | 'dependency' | 'metric';
   confidence: number;
@@ -5,6 +14,8 @@ export interface PredictionCandidate {
   evidenceId: string;
   metricName?: string;
   supportingEvidence?: string;
+  dependencyId?: string;
+  dependencyName?: string;
 }
 
 export interface OperationalFeatures {
@@ -19,6 +30,7 @@ export interface OperationalFeatures {
 
 export interface PredictDebug {
   features: OperationalFeatures;
+  dependencyEvidence?: AiDependencyEvidence[];
   selectedModel: string;
   inferenceMs?: number;
   requestPayload: {
@@ -54,6 +66,7 @@ export interface PredictResult {
     dependencies: number;
     errorLogs?: number;
   };
+  dependencyEvidence?: AiDependencyEvidence[];
   debug?: PredictDebug;
   generatedAt: string;
 }
@@ -65,7 +78,9 @@ export interface AiPredictRequestPayload {
   symptom: string;
   signals: string[];
   features: OperationalFeatures;
-  context: Record<string, unknown>;
+  context: Record<string, unknown> & {
+    dependencies?: AiDependencyEvidence[];
+  };
   top_k: number;
 }
 
@@ -81,6 +96,8 @@ export interface AiPredictResponsePayload {
     evidence_id?: string | null;
     metric_name?: string | null;
     supporting_evidence?: string | null;
+    dependency_id?: string | null;
+    dependency_name?: string | null;
   }>;
   model: {
     name: string;
